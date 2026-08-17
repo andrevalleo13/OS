@@ -87,7 +87,7 @@ function MusclePiece({ part, isHovered, isSelected, onPointerOver, onPointerOut,
     uTime: { value: 0 },
     uHover: { value: 0 },
     uSelected: { value: 0 },
-    uAccent: { value: new THREE.Color("#ff5500") },
+    uAccent: { value: new THREE.Color("#ffffff") },
   }), []);
 
   useFrame((state) => {
@@ -276,9 +276,9 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
 
       {/* Awaiting Asset Indicator */}
       {!hasRealisticModel && (
-        <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md border border-[#ff5500]/30 rounded-xl p-3 flex flex-col gap-1 pointer-events-none">
-          <span className="text-[10px] text-[#ff5500] font-mono uppercase tracking-wider flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#ff5500] animate-pulse" />
+        <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col gap-1 pointer-events-none">
+          <span className="text-[10px] text-white/70 font-mono uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/70 animate-pulse" />
             Awaiting Realistic Asset
           </span>
           <span className="text-[9px] text-gray-500">Place body.glb in /public/models/</span>

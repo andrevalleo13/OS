@@ -15,7 +15,7 @@ const BodyModel = dynamic(() => import("@/components/gym/BodyModel"), {
   ssr: false,
   loading: () => (
     <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-[#0a0a0a]/40">
-      <div className="w-6 h-6 border border-white/10 border-t-[#ff5500] rounded-full animate-spin" />
+      <div className="w-6 h-6 border border-white/10 border-t-white rounded-full animate-spin" />
       <span className="text-[10px] text-gray-500 font-mono tracking-wider">Awaiting high-res .glb asset...</span>
     </div>
   ),
@@ -59,14 +59,14 @@ export default function GymPage() {
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <Activity size={14} className="text-[#ff5500]" />
+                  <Activity size={14} className="text-white" />
                   <span className="text-sm font-medium text-white">{muscleInfo.name}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono">
                   <span>Soreness: {muscleInfo.soreness}%</span>
                   <div className="w-16 h-[2px] bg-white/5 rounded-full overflow-hidden">
                     <motion.div
-                      className="h-full rounded-full bg-[#ff5500]"
+                      className="h-full rounded-full bg-white"
                       initial={{ width: 0 }}
                       animate={{ width: `${muscleInfo.soreness}%` }}
                     />
@@ -93,16 +93,11 @@ export default function GymPage() {
       {/* ────────────────────────────────────────────── */}
       <div className="col-span-12 lg:col-span-7 row-span-1 bg-[#0a0a0a]/60 backdrop-blur-xl border border-white/[0.06] rounded-3xl p-6 shadow-xl flex flex-col overflow-hidden">
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#111] border border-white/10 flex items-center justify-center">
-              <Dumbbell size={14} className="text-gray-400" />
-            </div>
-            <div>
-              <h2 className="text-sm font-medium text-white">{MOCK_CURRENT_ROUTINE.name}</h2>
-              <span className="text-[10px] text-gray-500 font-mono">{MOCK_CURRENT_ROUTINE.day}</span>
-            </div>
+          <div>
+            <h2 className="text-sm font-medium text-white">{MOCK_CURRENT_ROUTINE.name}</h2>
+            <span className="text-[10px] text-gray-500 font-mono">{MOCK_CURRENT_ROUTINE.day}</span>
           </div>
-          <button className="px-4 py-1.5 bg-[#ff5500] hover:bg-[#ff6600] text-white text-[10px] font-bold tracking-wider uppercase rounded-full transition-colors">
+          <button className="px-4 py-1.5 bg-white hover:bg-gray-200 text-black text-[10px] font-bold tracking-wider uppercase rounded-full transition-colors">
             Start Session
           </button>
         </div>
@@ -118,7 +113,7 @@ export default function GymPage() {
                 <div className="flex items-center gap-4 text-[10px] font-mono">
                   <span className="text-gray-500">{ex.sets} × {ex.reps}</span>
                   <div className="w-px h-3 bg-white/10" />
-                  <span className="text-[#ff5500]/80">RPE {ex.targetRpe}</span>
+                  <span className="text-gray-400">RPE {ex.targetRpe}</span>
                 </div>
               </div>
             ))}
@@ -159,7 +154,7 @@ export default function GymPage() {
       {/* ────────────────────────────────────────────── */}
       <div className="col-span-12 lg:col-span-3 row-span-1 bg-[#0a0a0a]/60 backdrop-blur-xl border border-white/[0.06] rounded-3xl p-6 shadow-xl flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 mb-6">
-          <Trophy size={14} className="text-[#ffb700]" />
+          <Trophy size={14} className="text-gray-400" />
           <h2 className="text-xs font-medium text-gray-200">Personal Records</h2>
         </div>
 
@@ -173,7 +168,7 @@ export default function GymPage() {
                     <span className="text-lg font-semibold text-white">{pr.weight}</span>
                     <span className="text-[9px] text-gray-500">kg</span>
                   </div>
-                  <span className="text-[9px] text-[#ff5500]/70 font-mono">{pr.date}</span>
+                  <span className="text-[9px] text-gray-500 font-mono">{pr.date}</span>
                 </div>
               </div>
             ))}

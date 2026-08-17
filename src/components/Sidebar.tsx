@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ScanFace, Box, BarChart2, Settings, Search, ChevronRight, Wand2, Zap } from "lucide-react";
+import { Home, ScanFace, Box, BarChart2, Settings, Search, ChevronRight, Wand2, Dumbbell } from "lucide-react";
 import ShadowOrb from "./ShadowOrb";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -24,7 +24,7 @@ export default function Sidebar() {
     { icon: Wand2, label: "Shadow", href: "/shadow" },
     { icon: ScanFace, label: "Biometrics", href: "/biometrics" },
     { icon: Box, label: "Obsidian", href: "/obsidian" },
-    { icon: Zap, label: "Gym", href: "/gym" },
+    { icon: Dumbbell, label: "Gym", href: "/gym" },
     { icon: BarChart2, label: "Finances", href: "/finances" },
   ];
 
