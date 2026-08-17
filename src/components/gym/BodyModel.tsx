@@ -2,7 +2,7 @@
 
 import { Canvas, useFrame, ThreeEvent, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
-import { useRef, useState, useMemo, useEffect } from "react";
+import { useRef, useState, useMemo, useEffect, Suspense } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
 import {
@@ -310,11 +310,13 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
         <directionalLight position={[3, 4, 2]} intensity={0.12} color="#fff" />
         <directionalLight position={[-2, 1, -3]} intensity={0.06} color="#aaaaff" />
 
-        {hasRealisticModel ? (
-          <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
-        ) : (
-          <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
-        )}
+        <Suspense fallback={<FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />}>
+          {hasRealisticModel ? (
+            <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+          ) : (
+            <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+          )}
+        </Suspense>
 
         <FloatingParticles />
         <CameraController selectedMuscle={selectedMuscle} controlsRef={controlsRef} />
