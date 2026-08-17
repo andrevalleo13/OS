@@ -132,11 +132,26 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
   // Apply custom shaders to the realistic model nodes
   useEffect(() => {
     if (!scene) return;
+    
+    // Auto-scale and center the model to match procedural body size
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    
+    // We want the model to be exactly 1.8 units tall
+    const scaleFactor = 1.8 / size.y;
+    scene.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    
+    // Recalculate box after scaling to get the new center
+    const scaledBox = new THREE.Box3().setFromObject(scene);
+    const center = new THREE.Vector3();
+    scaledBox.getCenter(center);
+    
+    // Move scene so its center is exactly at [0, 0, 0]
+    scene.position.set(-center.x, -center.y, -center.z);
+
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
-        // Here we would apply the shader material to the loaded meshes.
-        // And hook up pointer events based on the mesh names (e.g. child.name === "chest").
-        // For now we just apply the structural shader as a placeholder since we don't know the node names.
         const mesh = child as THREE.Mesh;
         mesh.material = new THREE.ShaderMaterial({
           vertexShader,
@@ -155,7 +170,7 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
 
   return (
     <group ref={groupRef}>
-      <primitive object={scene} scale={[0.1, 0.1, 0.1]} />
+      <primitive object={scene} />
     </group>
   );
 }
