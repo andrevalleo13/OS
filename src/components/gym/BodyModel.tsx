@@ -281,7 +281,7 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
         />
       </group>
       {/* Light strictly follows the closest muscle or mouse */}
-      <DynamicHoverLight selectedMuscle={selectedId} pointerPos={pointerPos} />
+      <DynamicHoverLight selectedMuscle={selectedId} />
     </group>
   );
 }
@@ -418,26 +418,29 @@ function CameraController({ selectedMuscle, controlsRef }: any) {
   return null;
 }
 
-function DynamicHoverLight({ selectedMuscle, pointerPos }: any) {
+function DynamicHoverLight({ selectedMuscle }: any) {
   const lightRef = useRef<THREE.PointLight>(null);
   
   useFrame(() => {
     if (!lightRef.current) return;
     
-    // If no pointer, fade out
-    if (!pointerPos) {
-      lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 0, 0.15);
+    // If no muscle selected, fade out completely
+    if (!selectedMuscle || !MUSCLE_CAMERA_TARGETS[selectedMuscle]) {
+      lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 0, 0.2);
       return;
     }
 
-    // Move light to pointer position but pulled outward on Z axis so it shines ON the skin
-    const zOffset = pointerPos.z > 0 ? 0.4 : -0.4;
-    lightRef.current.position.lerp(new THREE.Vector3(pointerPos.x, pointerPos.y, pointerPos.z + zOffset), 0.2);
-    // Keep intensity moderate to avoid blowing out PBR materials
-    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 1.2, 0.15);
+    // Get the mathematical center of the selected muscle
+    const targetPos = MUSCLE_CAMERA_TARGETS[selectedMuscle].target;
+    
+    // Position the light exactly over the muscle center, slightly floating above the skin
+    lightRef.current.position.lerp(new THREE.Vector3(targetPos[0], targetPos[1], targetPos[2] + 0.15), 0.15);
+    
+    // Keep a moderate intensity so it doesn't blow out, but tight distance so it only lights up that specific part
+    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 1.5, 0.15);
   });
 
-  return <pointLight ref={lightRef} distance={0.8} color="#ffffff" decay={2} intensity={0} />;
+  return <pointLight ref={lightRef} distance={0.6} color="#ffffff" decay={3} intensity={0} />;
 }
 
 // ─────────────────────────────────────────────
