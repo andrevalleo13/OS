@@ -1,9 +1,10 @@
 "use client";
 
-import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
+import { Canvas, useFrame, ThreeEvent, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import { useRef, useState, useMemo, useEffect } from "react";
 import * as THREE from "three";
+import gsap from "gsap";
 import {
   MUSCLE_GROUPS,
   STRUCTURAL_PARTS,
@@ -227,12 +228,67 @@ function FloatingParticles() {
 }
 
 // ─────────────────────────────────────────────
+// Camera Animation Controller
+// ─────────────────────────────────────────────
+
+const MUSCLE_CAMERA_TARGETS: Record<string, { pos: [number, number, number], target: [number, number, number] }> = {
+  chest: { pos: [0, 0.4, 0.8], target: [0, 0.35, 0] },
+  abs: { pos: [0, 0.1, 0.8], target: [0, 0.1, 0] },
+  shoulders: { pos: [0, 0.6, 0.9], target: [0, 0.5, 0] },
+  biceps: { pos: [0.3, 0.3, 0.8], target: [0, 0.3, 0] },
+  triceps: { pos: [0.3, 0.3, 0.8], target: [0, 0.3, 0] },
+  forearms: { pos: [0.4, 0.0, 0.8], target: [0, 0.0, 0] },
+  quads: { pos: [0, -0.3, 1.2], target: [0, -0.3, 0] },
+  hamstrings: { pos: [0, -0.3, -1.2], target: [0, -0.3, 0] },
+  calves: { pos: [0, -0.7, 1.0], target: [0, -0.7, 0] },
+  lats: { pos: [0, 0.3, -1.0], target: [0, 0.3, 0] },
+  traps: { pos: [0, 0.6, -0.8], target: [0, 0.5, 0] },
+  lower_back: { pos: [0, 0.1, -1.0], target: [0, 0.1, 0] },
+  glutes: { pos: [0, -0.1, -1.0], target: [0, -0.1, 0] },
+};
+
+function CameraController({ selectedMuscle, controlsRef }: any) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    let targetPos = [0, 0.15, 2.2];
+    let targetLook = [0, 0, 0];
+
+    if (selectedMuscle && MUSCLE_CAMERA_TARGETS[selectedMuscle]) {
+      targetPos = MUSCLE_CAMERA_TARGETS[selectedMuscle].pos;
+      targetLook = MUSCLE_CAMERA_TARGETS[selectedMuscle].target;
+    }
+
+    gsap.to(camera.position, {
+      x: targetPos[0],
+      y: targetPos[1],
+      z: targetPos[2],
+      duration: 1.2,
+      ease: "power4.inOut",
+    });
+
+    if (controlsRef.current) {
+      gsap.to(controlsRef.current.target, {
+        x: targetLook[0],
+        y: targetLook[1],
+        z: targetLook[2],
+        duration: 1.2,
+        ease: "power4.inOut",
+      });
+    }
+  }, [selectedMuscle, camera, controlsRef]);
+
+  return null;
+}
+
+// ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
 
 export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscle }: any) {
   const [isFront, setIsFront] = useState(true);
   const [hasRealisticModel, setHasRealisticModel] = useState(false);
+  const controlsRef = useRef<any>(null);
 
   useEffect(() => {
     return () => { document.body.style.cursor = "auto"; };
@@ -261,7 +317,8 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
         )}
 
         <FloatingParticles />
-        <OrbitControls enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 3} maxPolarAngle={(Math.PI * 2) / 3} rotateSpeed={0.5} />
+        <CameraController selectedMuscle={selectedMuscle} controlsRef={controlsRef} />
+        <OrbitControls ref={controlsRef} enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 3} maxPolarAngle={(Math.PI * 2) / 3} rotateSpeed={0.5} />
       </Canvas>
 
       {/* Front / Back Toggle */}
