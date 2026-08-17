@@ -53,7 +53,10 @@ const muscleFragShader = /* glsl */ `
 
     float alpha = 1.0;
     if (uHitboxMode > 0.5) {
-      alpha = 0.0; // hitboxes are 100% invisible, only used for raycasting!
+      float intensity = (uHover * 0.4) + (uSelected * 0.6);
+      // AR Overlay Effect: pure additive energy with fresnel rim
+      color = uAccent * fresnel * intensity * 3.0;
+      alpha = intensity * (fresnel + 0.2); // slight base alpha + rim glow
     }
 
     gl_FragColor = vec4(color, alpha);
@@ -112,13 +115,18 @@ function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPo
   let pos = part.position;
   if (isHitbox) {
     pos = [...part.position];
-    // Bring arms closer to torso
-    if (Math.abs(pos[0]) > 0.2) {
-      pos[0] = pos[0] * 0.72;
+    // Bring arms closer to torso (realistic model is more A-pose)
+    if (Math.abs(pos[0]) >= 0.2) {
+      pos[0] = pos[0] * 0.65; // Pull in x-axis
     }
-    // Lower the arms slightly
-    if (pos[1] > 0 && Math.abs(pos[0]) > 0.15) {
-      pos[1] = pos[1] - 0.05;
+    // Lower the upper arms
+    if (pos[1] > 0.2 && Math.abs(part.position[0]) >= 0.25) {
+      pos[1] = pos[1] - 0.08;
+    }
+    // Lower the forearms specifically
+    if (pos[1] <= 0.1 && Math.abs(part.position[0]) >= 0.25) {
+      pos[1] = pos[1] - 0.15;
+      pos[0] = pos[0] * 0.8; // Pull in more
     }
   }
 
@@ -138,7 +146,9 @@ function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPo
         vertexShader={vertexShader} 
         fragmentShader={muscleFragShader} 
         transparent={true}
+        blending={isHitbox ? THREE.AdditiveBlending : THREE.NormalBlending}
         depthWrite={!isHitbox}
+        depthTest={true}
       />
     </mesh>
   );
