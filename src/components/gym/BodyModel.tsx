@@ -53,7 +53,7 @@ const muscleFragShader = /* glsl */ `
 
     float alpha = 1.0;
     if (uHitboxMode > 0.5) {
-      alpha = (uHover * 0.5) + (uSelected * 0.8);
+      alpha = 0.0; // hitboxes are 100% invisible, only used for raycasting!
     }
 
     gl_FragColor = vec4(color, alpha);
@@ -103,15 +103,28 @@ function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPo
 
   useFrame((state) => {
     if (matRef.current) {
+      // Just keep time running, alpha is 0 anyway for hitboxes
       matRef.current.uniforms.uTime.value = state.clock.elapsedTime;
-      matRef.current.uniforms.uHover.value = THREE.MathUtils.lerp(matRef.current.uniforms.uHover.value, isHovered ? 1 : 0, 0.1);
-      matRef.current.uniforms.uSelected.value = THREE.MathUtils.lerp(matRef.current.uniforms.uSelected.value, isSelected ? 1 : 0, 0.1);
     }
   });
 
+  // Adjust hitbox position for the realistic model's A-pose arms
+  let pos = part.position;
+  if (isHitbox) {
+    pos = [...part.position];
+    // Bring arms closer to torso
+    if (Math.abs(pos[0]) > 0.2) {
+      pos[0] = pos[0] * 0.72;
+    }
+    // Lower the arms slightly
+    if (pos[1] > 0 && Math.abs(pos[0]) > 0.15) {
+      pos[1] = pos[1] - 0.05;
+    }
+  }
+
   return (
     <mesh
-      position={part.position}
+      position={pos}
       rotation={part.rotation || [0, 0, 0]}
       scale={part.scale || [1, 1, 1]}
       onClick={onClick}
@@ -237,9 +250,19 @@ function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover,
             isHitbox={hitboxOnly}
             isHovered={hoveredId === group.id}
             isSelected={selectedId === group.id}
-            onPointerOver={(e: any) => { e.stopPropagation(); setHoveredId(group.id); onHover(group.id); document.body.style.cursor = "pointer"; }}
-            onPointerOut={() => { setHoveredId(null); onHover(null); document.body.style.cursor = "auto"; }}
-            onClick={(e: any) => { e.stopPropagation(); onSelect(selectedId === group.id ? null : group.id); }}
+            onPointerOver={(e: any) => { 
+              e.stopPropagation(); 
+              setHoveredId(group.id); 
+              onHover(group.id); 
+              onSelect(group.id); // Trigger camera zoom and panel on hover!
+              document.body.style.cursor = "pointer"; 
+            }}
+            onPointerOut={() => { 
+              setHoveredId(null); 
+              onHover(null); 
+              document.body.style.cursor = "auto"; 
+            }}
+            onClick={(e: any) => { e.stopPropagation(); }}
           />
         ))
       )}
@@ -334,6 +357,27 @@ function CameraController({ selectedMuscle, controlsRef }: any) {
   return null;
 }
 
+function DynamicHoverLight({ selectedMuscle }: any) {
+  const lightRef = useRef<THREE.PointLight>(null);
+  
+  useFrame(() => {
+    if (!lightRef.current) return;
+    
+    // If no muscle selected, turn off light
+    if (!selectedMuscle || !MUSCLE_CAMERA_TARGETS[selectedMuscle]) {
+      lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 0, 0.1);
+      return;
+    }
+
+    const targetPos = MUSCLE_CAMERA_TARGETS[selectedMuscle].target;
+    // Position light slightly in front of the muscle
+    lightRef.current.position.lerp(new THREE.Vector3(targetPos[0], targetPos[1], targetPos[2] + 0.4), 0.1);
+    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 3.0, 0.1);
+  });
+
+  return <pointLight ref={lightRef} distance={1.2} color="#ffffff" decay={2} intensity={0} />;
+}
+
 // ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
@@ -366,6 +410,7 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
         <Suspense fallback={<FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />}>
           {hasRealisticModel ? (
             <group>
+              <DynamicHoverLight selectedMuscle={selectedMuscle} />
               <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
               <FallbackProceduralBody hitboxOnly={true} onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
             </group>
