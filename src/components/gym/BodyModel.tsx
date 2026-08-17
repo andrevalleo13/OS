@@ -31,6 +31,7 @@ const muscleFragShader = /* glsl */ `
   uniform float uTime;
   uniform float uHover;
   uniform float uSelected;
+  uniform float uHitboxMode;
   uniform vec3 uAccent;
 
   varying vec3 vNormal;
@@ -50,7 +51,12 @@ const muscleFragShader = /* glsl */ `
     color += uAccent * uSelected * 0.07;
     color += uAccent * uSelected * fresnel * 0.5;
 
-    gl_FragColor = vec4(color, 1.0);
+    float alpha = 1.0;
+    if (uHitboxMode > 0.5) {
+      alpha = (uHover * 0.5) + (uSelected * 0.8);
+    }
+
+    gl_FragColor = vec4(color, alpha);
   }
 `;
 
@@ -82,28 +88,45 @@ function PartGeometry({ type, args }: { type: string; args: number[] }) {
   }
 }
 
-function MusclePiece({ part, isHovered, isSelected, onPointerOver, onPointerOut, onClick }: any) {
+function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPointerOut, isHitbox }: any) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const uniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uHover: { value: 0 },
-    uSelected: { value: 0 },
-    uAccent: { value: new THREE.Color("#ffffff") },
-  }), []);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uHover: { value: 0 },
+      uSelected: { value: 0 },
+      uAccent: { value: new THREE.Color("#ffffff") },
+      uHitboxMode: { value: isHitbox ? 1.0 : 0.0 }
+    }),
+    [isHitbox]
+  );
 
   useFrame((state) => {
-    if (!matRef.current) return;
-    const u = matRef.current.uniforms;
-    u.uTime.value = state.clock.elapsedTime;
-    u.uHover.value = THREE.MathUtils.lerp(u.uHover.value, isHovered ? 1 : 0, 0.08);
-    u.uSelected.value = THREE.MathUtils.lerp(u.uSelected.value, isSelected ? 1 : 0, 0.08);
+    if (matRef.current) {
+      matRef.current.uniforms.uTime.value = state.clock.elapsedTime;
+      matRef.current.uniforms.uHover.value = THREE.MathUtils.lerp(matRef.current.uniforms.uHover.value, isHovered ? 1 : 0, 0.1);
+      matRef.current.uniforms.uSelected.value = THREE.MathUtils.lerp(matRef.current.uniforms.uSelected.value, isSelected ? 1 : 0, 0.1);
+    }
   });
 
   return (
-    <mesh position={part.position} rotation={part.rotation || [0, 0, 0]} scale={part.scale || [1, 1, 1]}
-      onPointerOver={onPointerOver} onPointerOut={onPointerOut} onClick={onClick}>
+    <mesh
+      position={part.position}
+      rotation={part.rotation || [0, 0, 0]}
+      scale={part.scale || [1, 1, 1]}
+      onClick={onClick}
+      onPointerOver={onPointerOver}
+      onPointerOut={onPointerOut}
+    >
       <PartGeometry type={part.type} args={part.args} />
-      <shaderMaterial ref={matRef} uniforms={uniforms} vertexShader={vertexShader} fragmentShader={muscleFragShader} />
+      <shaderMaterial 
+        ref={matRef} 
+        uniforms={uniforms} 
+        vertexShader={vertexShader} 
+        fragmentShader={muscleFragShader} 
+        transparent={true}
+        depthWrite={!isHitbox}
+      />
     </mesh>
   );
 }
@@ -159,14 +182,17 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
     
     setModelTransform({ scale: scaleFactor, position: newPos });
 
+    // No longer overwriting with structuralFragShader so original textures are visible.
+    // We just enable shadows and optimize materials.
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        mesh.material = new THREE.ShaderMaterial({
-          vertexShader,
-          fragmentShader: structuralFragShader,
-          uniforms: { uTime: { value: 0 } }
-        });
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        // Optionally tweak the material if it's too dark
+        if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).color) {
+           // We can leave it as is to preserve the artist's original textures
+        }
       }
     });
   }, [scene]);
@@ -190,7 +216,7 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
 // The Fallback Procedural Body
 // ─────────────────────────────────────────────
 
-function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover }: any) {
+function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover, hitboxOnly }: any) {
   const groupRef = useRef<THREE.Group>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -202,12 +228,13 @@ function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover 
 
   return (
     <group ref={groupRef} position={[0, -0.1, 0]}>
-      {STRUCTURAL_PARTS.map((part, i) => <StructuralPiece key={`s-${i}`} part={part} />)}
+      {!hitboxOnly && STRUCTURAL_PARTS.map((part, i) => <StructuralPiece key={`s-${i}`} part={part} />)}
       {MUSCLE_GROUPS.map((group) =>
         group.parts.map((part, pi) => (
           <MusclePiece
             key={`${group.id}-${pi}`}
             part={part}
+            isHitbox={hitboxOnly}
             isHovered={hoveredId === group.id}
             isSelected={selectedId === group.id}
             onPointerOver={(e: any) => { e.stopPropagation(); setHoveredId(group.id); onHover(group.id); document.body.style.cursor = "pointer"; }}
@@ -338,7 +365,10 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
 
         <Suspense fallback={<FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />}>
           {hasRealisticModel ? (
-            <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+            <group>
+              <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+              <FallbackProceduralBody hitboxOnly={true} onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+            </group>
           ) : (
             <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
           )}
