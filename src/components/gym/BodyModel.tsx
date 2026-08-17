@@ -128,27 +128,36 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
   // Try to load the model. If it fails (404), useGLTF throws, so this component must be wrapped in ErrorBoundary.
   const { scene } = useGLTF("/models/body.glb");
   const groupRef = useRef<THREE.Group>(null);
+  const [modelTransform, setModelTransform] = useState<{scale: number, position: [number, number, number]}>({ scale: 1, position: [0, 0, 0] });
 
   // Apply custom shaders to the realistic model nodes
   useEffect(() => {
     if (!scene) return;
     
-    // Auto-scale and center the model to match procedural body size
+    // Reset scene scale to 1 to accurately measure it (prevents hot-reload bugs)
+    scene.scale.set(1, 1, 1);
+    scene.position.set(0, 0, 0);
+    scene.updateMatrixWorld(true);
+
     const box = new THREE.Box3().setFromObject(scene);
     const size = new THREE.Vector3();
     box.getSize(size);
     
-    // We want the model to be exactly 1.8 units tall
+    // The ecorche model might be huge. We want it exactly 1.8 units tall.
     const scaleFactor = 1.8 / size.y;
-    scene.scale.set(scaleFactor, scaleFactor, scaleFactor);
     
-    // Recalculate box after scaling to get the new center
-    const scaledBox = new THREE.Box3().setFromObject(scene);
+    // Get original center and compute the needed shift to place it at origin AFTER scaling
     const center = new THREE.Vector3();
-    scaledBox.getCenter(center);
+    box.getCenter(center);
     
-    // Move scene so its center is exactly at [0, 0, 0]
-    scene.position.set(-center.x, -center.y, -center.z);
+    // Apply transformations safely to the wrapper group, not the scene directly
+    const newPos: [number, number, number] = [
+      -center.x * scaleFactor, 
+      -center.y * scaleFactor, 
+      -center.z * scaleFactor
+    ];
+    
+    setModelTransform({ scale: scaleFactor, position: newPos });
 
     scene.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
@@ -170,7 +179,9 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
 
   return (
     <group ref={groupRef}>
-      <primitive object={scene} />
+      <group scale={[modelTransform.scale, modelTransform.scale, modelTransform.scale]} position={modelTransform.position}>
+        <primitive object={scene} />
+      </group>
     </group>
   );
 }
