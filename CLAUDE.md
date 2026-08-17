@@ -13,7 +13,12 @@ Welcome to ValleOS. When assisting with this project, you must adhere strictly t
 - **Framer Motion**: Almost all layout mounts/unmounts should use `framer-motion` (`AnimatePresence`, `motion.div`). Keep transitions fast and snappy (`duration: 0.15` to `0.3`, `easeOut` or springs).
 - **GSAP**: Reserved for complex coordinated timelines (like the Sidebar expand/collapse text staggers). Do not mix GSAP and Framer Motion on the exact same properties.
 
-## 3. Architecture Rules
+## 3. WebGL & 3D Integration
+- **Libraries**: Use `@react-three/fiber` and `@react-three/drei` for all 3D canvas rendering.
+- **Performance**: Ensure heavy `.glb` assets are loaded with `<Suspense>` boundaries to prevent Next.js crashes.
+- **Interactivity**: For complex meshes where individual muscle raycasting isn't possible natively, use transparent procedural overlays ("AR Hitboxes") to restore pointer interactions.
+
+## 4. Architecture Rules
 - **Framework**: Next.js 14 App Router.
 - **State**: Zustand for global UI state (`useUIStore`). SWR for data fetching and real-time dashboard updates.
 - **Database**: Prisma + SQLite (Phase 3).

@@ -5,6 +5,7 @@
 - **Styling**: Tailwind CSS. Avoid arbitrary values unless absolutely necessary for precision.
 - **Icons**: Lucide React (`lucide-react`).
 - **Animations**: Framer Motion (`framer-motion`) and GSAP (`gsap`, `@gsap/react`).
+- **3D & WebGL**: Three.js wrapped via `@react-three/fiber` and `@react-three/drei`. Custom GLSL shaders used for material logic.
 - **State**: Zustand (`useUIStore`) for cross-component UI state (e.g., Sidebar expansion).
 - **Data Fetching**: SWR for client-side data fetching to ensure real-time responsiveness.
 

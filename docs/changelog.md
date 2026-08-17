@@ -12,6 +12,15 @@
 - **Navigation & Icons**: Migrated entire icon suite from Radix to Lucide React. Set up placeholder routes for Gym, Finances, Biometrics, and Obsidian.
 - **Documentation**: Established `claude.md` and `/docs` rule sets. Banned large UI headers.
 
+## Phase 2.5: WebGL Gym Module & Interactivity
+*Status: COMPLETED*
+
+- **3D Foundation**: Integrated `@react-three/fiber` and `drei`. Set up a 3D Gym canvas view.
+- **GLB Integration**: Converted and imported an external high-res `body.glb` (ecorche model) via `gltf-pipeline`.
+- **Dynamic Scaling**: Built a `BoundingBox` algorithm to auto-scale and perfectly center any imported `.glb` mesh to 1.8 units tall, resolving Next.js hot-reload cache bugs.
+- **GSAP Camera Control**: Created a smooth `CameraController` linking GSAP animations with `OrbitControls.target` and `camera.position` for cinematic zooms on specific muscles.
+- **AR Hitbox System**: Engineered a hybrid rendering layer where the original textures of the solid `.glb` are preserved, but a transparent procedural model overlay (`uHitboxMode`) acts as a raycastable hit-box system for specific muscle interaction and glowing highlights.
+
 ## Phase 3: Backend & Data Integration
 *Status: PENDING*
 
