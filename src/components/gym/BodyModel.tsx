@@ -226,11 +226,62 @@ function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
     }
   });
 
+  // Pointer interaction state
+  const [pointerPos, setPointerPos] = useState<THREE.Vector3 | null>(null);
+
+  const handlePointerMove = (e: any) => {
+    e.stopPropagation();
+    if (e.intersections.length > 0) {
+      const hitPoint = e.intersections[0].point;
+      setPointerPos(hitPoint);
+      document.body.style.cursor = "pointer";
+      
+      // Calculate closest muscle using procedural centers
+      let closestId = null;
+      let minDist = Infinity;
+      // Procedural body is shifted by -0.1 y, so we adjust hitPoint to match its coordinate space
+      const testPoint = new THREE.Vector3(hitPoint.x, hitPoint.y + 0.1, hitPoint.z);
+
+      MUSCLE_GROUPS.forEach(group => {
+        group.parts.forEach(part => {
+           const pos = new THREE.Vector3(...part.position);
+           // A-pose adjustments to match realistic model
+           if (Math.abs(pos.x) >= 0.2) pos.x *= 0.65;
+           if (pos.y > 0.2 && Math.abs(pos.x) >= 0.25) pos.y -= 0.08;
+           if (pos.y <= 0.1 && Math.abs(pos.x) >= 0.25) { pos.y -= 0.15; pos.x *= 0.8; }
+
+           const dist = testPoint.distanceTo(pos);
+           if (dist < minDist) {
+             minDist = dist;
+             closestId = group.id;
+           }
+        });
+      });
+
+      if (minDist < 0.25 && closestId) {
+        onHover(closestId);
+        onSelect(closestId);
+      }
+    }
+  };
+
+  const handlePointerOut = () => {
+    setPointerPos(null);
+    onHover(null);
+    document.body.style.cursor = "auto";
+  };
+
   return (
     <group ref={groupRef}>
       <group scale={[modelTransform.scale, modelTransform.scale, modelTransform.scale]} position={modelTransform.position}>
-        <primitive object={scene} />
+        <primitive 
+          object={scene} 
+          onPointerMove={handlePointerMove}
+          onPointerOut={handlePointerOut}
+        />
       </group>
+      {/* Light strictly follows the closest muscle or mouse */}
+      <DynamicHoverLight selectedMuscle={selectedId} pointerPos={pointerPos} />
     </group>
   );
 }
@@ -367,25 +418,26 @@ function CameraController({ selectedMuscle, controlsRef }: any) {
   return null;
 }
 
-function DynamicHoverLight({ selectedMuscle }: any) {
+function DynamicHoverLight({ selectedMuscle, pointerPos }: any) {
   const lightRef = useRef<THREE.PointLight>(null);
   
   useFrame(() => {
     if (!lightRef.current) return;
     
-    // If no muscle selected, turn off light
-    if (!selectedMuscle || !MUSCLE_CAMERA_TARGETS[selectedMuscle]) {
-      lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 0, 0.1);
+    // If no pointer, fade out
+    if (!pointerPos) {
+      lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 0, 0.15);
       return;
     }
 
-    const targetPos = MUSCLE_CAMERA_TARGETS[selectedMuscle].target;
-    // Position light slightly in front of the muscle
-    lightRef.current.position.lerp(new THREE.Vector3(targetPos[0], targetPos[1], targetPos[2] + 0.4), 0.1);
-    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 3.0, 0.1);
+    // Move light to pointer position but pulled outward on Z axis so it shines ON the skin
+    const zOffset = pointerPos.z > 0 ? 0.4 : -0.4;
+    lightRef.current.position.lerp(new THREE.Vector3(pointerPos.x, pointerPos.y, pointerPos.z + zOffset), 0.2);
+    // Keep intensity moderate to avoid blowing out PBR materials
+    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 1.2, 0.15);
   });
 
-  return <pointLight ref={lightRef} distance={1.2} color="#ffffff" decay={2} intensity={0} />;
+  return <pointLight ref={lightRef} distance={0.8} color="#ffffff" decay={2} intensity={0} />;
 }
 
 // ─────────────────────────────────────────────
@@ -420,9 +472,7 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
         <Suspense fallback={<FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />}>
           {hasRealisticModel ? (
             <group>
-              <DynamicHoverLight selectedMuscle={selectedMuscle} />
               <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
-              <FallbackProceduralBody hitboxOnly={true} onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
             </group>
           ) : (
             <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
