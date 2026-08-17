@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, ThreeEvent, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { useRef, useState, useMemo, useEffect, Suspense } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
@@ -91,7 +91,7 @@ function PartGeometry({ type, args }: { type: string; args: number[] }) {
   }
 }
 
-function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPointerOut, isHitbox }: any) {
+function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPointerOut }: any) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
   const uniforms = useMemo(
     () => ({
@@ -99,40 +99,20 @@ function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPo
       uHover: { value: 0 },
       uSelected: { value: 0 },
       uAccent: { value: new THREE.Color("#ffffff") },
-      uHitboxMode: { value: isHitbox ? 1.0 : 0.0 }
+      uHitboxMode: { value: 0.0 }
     }),
-    [isHitbox]
+    []
   );
 
   useFrame((state) => {
     if (matRef.current) {
-      // Just keep time running, alpha is 0 anyway for hitboxes
       matRef.current.uniforms.uTime.value = state.clock.elapsedTime;
     }
   });
 
-  // Adjust hitbox position for the realistic model's A-pose arms
-  let pos = part.position;
-  if (isHitbox) {
-    pos = [...part.position];
-    // Bring arms closer to torso (realistic model is more A-pose)
-    if (Math.abs(pos[0]) >= 0.2) {
-      pos[0] = pos[0] * 0.65; // Pull in x-axis
-    }
-    // Lower the upper arms
-    if (pos[1] > 0.2 && Math.abs(part.position[0]) >= 0.25) {
-      pos[1] = pos[1] - 0.08;
-    }
-    // Lower the forearms specifically
-    if (pos[1] <= 0.1 && Math.abs(part.position[0]) >= 0.25) {
-      pos[1] = pos[1] - 0.15;
-      pos[0] = pos[0] * 0.8; // Pull in more
-    }
-  }
-
   return (
     <mesh
-      position={pos}
+      position={part.position}
       rotation={part.rotation || [0, 0, 0]}
       scale={part.scale || [1, 1, 1]}
       onClick={onClick}
@@ -146,8 +126,8 @@ function MusclePiece({ part, isHovered, isSelected, onClick, onPointerOver, onPo
         vertexShader={vertexShader} 
         fragmentShader={muscleFragShader} 
         transparent={true}
-        blending={isHitbox ? THREE.AdditiveBlending : THREE.NormalBlending}
-        depthWrite={!isHitbox}
+        blending={THREE.NormalBlending}
+        depthWrite={true}
         depthTest={true}
       />
     </mesh>
@@ -170,127 +150,7 @@ function StructuralPiece({ part }: { part: MusclePartDef }) {
 // Realistic GLB Body Component (Target)
 // ─────────────────────────────────────────────
 
-function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
-  // Try to load the model. If it fails (404), useGLTF throws, so this component must be wrapped in ErrorBoundary.
-  const { scene } = useGLTF("/models/body.glb");
-  const groupRef = useRef<THREE.Group>(null);
-  const [modelTransform, setModelTransform] = useState<{scale: number, position: [number, number, number]}>({ scale: 1, position: [0, 0, 0] });
-
-  // Apply custom shaders to the realistic model nodes
-  useEffect(() => {
-    if (!scene) return;
-    
-    // Reset scene scale to 1 to accurately measure it (prevents hot-reload bugs)
-    scene.scale.set(1, 1, 1);
-    scene.position.set(0, 0, 0);
-    scene.updateMatrixWorld(true);
-
-    const box = new THREE.Box3().setFromObject(scene);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    
-    // The ecorche model might be huge. We want it exactly 1.8 units tall.
-    const scaleFactor = 1.8 / size.y;
-    
-    // Get original center and compute the needed shift to place it at origin AFTER scaling
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    
-    // Apply transformations safely to the wrapper group, not the scene directly
-    const newPos: [number, number, number] = [
-      -center.x * scaleFactor, 
-      -center.y * scaleFactor, 
-      -center.z * scaleFactor
-    ];
-    
-    setModelTransform({ scale: scaleFactor, position: newPos });
-
-    // No longer overwriting with structuralFragShader so original textures are visible.
-    // We just enable shadows and optimize materials.
-    scene.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mesh = child as THREE.Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        // Optionally tweak the material if it's too dark
-        if (mesh.material && (mesh.material as THREE.MeshStandardMaterial).color) {
-           // We can leave it as is to preserve the artist's original textures
-        }
-      }
-    });
-  }, [scene]);
-
-  useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotation, 0.04);
-    }
-  });
-
-  // Pointer interaction state
-  const [pointerPos, setPointerPos] = useState<THREE.Vector3 | null>(null);
-
-  const handlePointerMove = (e: any) => {
-    e.stopPropagation();
-    if (e.intersections.length > 0) {
-      const hitPoint = e.intersections[0].point;
-      setPointerPos(hitPoint);
-      document.body.style.cursor = "pointer";
-      
-      // Calculate closest muscle using procedural centers
-      let closestId = null;
-      let minDist = Infinity;
-      // Procedural body is shifted by -0.1 y, so we adjust hitPoint to match its coordinate space
-      const testPoint = new THREE.Vector3(hitPoint.x, hitPoint.y + 0.1, hitPoint.z);
-
-      MUSCLE_GROUPS.forEach(group => {
-        group.parts.forEach(part => {
-           const pos = new THREE.Vector3(...part.position);
-           // A-pose adjustments to match realistic model
-           if (Math.abs(pos.x) >= 0.2) pos.x *= 0.65;
-           if (pos.y > 0.2 && Math.abs(pos.x) >= 0.25) pos.y -= 0.08;
-           if (pos.y <= 0.1 && Math.abs(pos.x) >= 0.25) { pos.y -= 0.15; pos.x *= 0.8; }
-
-           const dist = testPoint.distanceTo(pos);
-           if (dist < minDist) {
-             minDist = dist;
-             closestId = group.id;
-           }
-        });
-      });
-
-      if (minDist < 0.25 && closestId) {
-        onHover(closestId);
-        onSelect(closestId);
-      }
-    }
-  };
-
-  const handlePointerOut = () => {
-    setPointerPos(null);
-    onHover(null);
-    document.body.style.cursor = "auto";
-  };
-
-  return (
-    <group ref={groupRef}>
-      <group scale={[modelTransform.scale, modelTransform.scale, modelTransform.scale]} position={modelTransform.position}>
-        <primitive 
-          object={scene} 
-          onPointerMove={handlePointerMove}
-          onPointerOut={handlePointerOut}
-        />
-      </group>
-      {/* Light strictly follows the closest muscle or mouse */}
-      <DynamicHoverLight selectedMuscle={selectedId} />
-    </group>
-  );
-}
-
-// ─────────────────────────────────────────────
-// The Fallback Procedural Body
-// ─────────────────────────────────────────────
-
-function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover, hitboxOnly }: any) {
+function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover }: any) {
   const groupRef = useRef<THREE.Group>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -302,13 +162,12 @@ function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover,
 
   return (
     <group ref={groupRef} position={[0, -0.1, 0]}>
-      {!hitboxOnly && STRUCTURAL_PARTS.map((part, i) => <StructuralPiece key={`s-${i}`} part={part} />)}
+      {STRUCTURAL_PARTS.map((part, i) => <StructuralPiece key={`s-${i}`} part={part} />)}
       {MUSCLE_GROUPS.map((group) =>
         group.parts.map((part, pi) => (
           <MusclePiece
             key={`${group.id}-${pi}`}
             part={part}
-            isHitbox={hitboxOnly}
             isHovered={hoveredId === group.id}
             isSelected={selectedId === group.id}
             onPointerOver={(e: any) => { 
@@ -418,30 +277,6 @@ function CameraController({ selectedMuscle, controlsRef }: any) {
   return null;
 }
 
-function DynamicHoverLight({ selectedMuscle }: any) {
-  const lightRef = useRef<THREE.PointLight>(null);
-  
-  useFrame(() => {
-    if (!lightRef.current) return;
-    
-    // If no muscle selected, fade out completely
-    if (!selectedMuscle || !MUSCLE_CAMERA_TARGETS[selectedMuscle]) {
-      lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 0, 0.2);
-      return;
-    }
-
-    // Get the mathematical center of the selected muscle
-    const targetPos = MUSCLE_CAMERA_TARGETS[selectedMuscle].target;
-    
-    // Position the light exactly over the muscle center, slightly floating above the skin
-    lightRef.current.position.lerp(new THREE.Vector3(targetPos[0], targetPos[1], targetPos[2] + 0.15), 0.15);
-    
-    // Keep a moderate intensity so it doesn't blow out, but tight distance so it only lights up that specific part
-    lightRef.current.intensity = THREE.MathUtils.lerp(lightRef.current.intensity, 1.5, 0.15);
-  });
-
-  return <pointLight ref={lightRef} distance={0.6} color="#ffffff" decay={3} intensity={0} />;
-}
 
 // ─────────────────────────────────────────────
 // Main Component
@@ -449,20 +284,10 @@ function DynamicHoverLight({ selectedMuscle }: any) {
 
 export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscle }: any) {
   const [isFront, setIsFront] = useState(true);
-  const [hasRealisticModel, setHasRealisticModel] = useState(false);
   const controlsRef = useRef<any>(null);
 
   useEffect(() => {
     return () => { document.body.style.cursor = "auto"; };
-  }, []);
-
-  useEffect(() => {
-    // Check if user has uploaded the realistic model yet
-    fetch('/models/body.glb', { method: 'HEAD' })
-      .then(res => {
-        if (res.ok) setHasRealisticModel(true);
-      })
-      .catch(() => setHasRealisticModel(false));
   }, []);
 
   return (
@@ -472,14 +297,8 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
         <directionalLight position={[3, 4, 2]} intensity={0.12} color="#fff" />
         <directionalLight position={[-2, 1, -3]} intensity={0.06} color="#aaaaff" />
 
-        <Suspense fallback={<FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />}>
-          {hasRealisticModel ? (
-            <group>
-              <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
-            </group>
-          ) : (
-            <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
-          )}
+        <Suspense fallback={null}>
+          <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
         </Suspense>
 
         <FloatingParticles />
