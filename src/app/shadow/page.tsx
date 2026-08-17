@@ -74,7 +74,7 @@ export default function ShadowPage() {
                 disabled={!inputValue.trim() || status !== 'idle'}
                 className="w-8 h-8 rounded-full bg-[#333] text-white flex items-center justify-center hover:bg-[#555] disabled:opacity-50 disabled:hover:bg-[#333] transition-colors"
               >
-                <ChevronRightIcon className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </form>
           </div>

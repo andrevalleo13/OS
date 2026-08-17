@@ -20,7 +20,7 @@ const itemVariants = {
     y: 0, 
     scale: 1,
     transition: {
-      type: "spring",
+      type: "spring" as const,
       stiffness: 100,
       damping: 15,
       mass: 1
@@ -30,7 +30,7 @@ const itemVariants = {
 
 const cardHover = {
   scale: 1.02,
-  transition: { type: "spring", stiffness: 400, damping: 20 }
+  transition: { type: "spring" as const, stiffness: 400, damping: 20 }
 };
 
 export default function Home() {
