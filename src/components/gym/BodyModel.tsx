@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, ThreeEvent } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { OrbitControls, useGLTF } from "@react-three/drei";
 import { useRef, useState, useMemo, useEffect } from "react";
 import * as THREE from "three";
 import {
@@ -39,17 +39,13 @@ const muscleFragShader = /* glsl */ `
     vec3 viewDir = normalize(vViewPosition);
     float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), 2.5);
 
-    // Base: dark obsidian chrome
     vec3 base = vec3(0.04, 0.04, 0.045);
     vec3 edge = vec3(0.14, 0.14, 0.17);
     vec3 color = mix(base, edge, fresnel * 0.6);
 
-    // Hover: warm accent pulse
     float pulse = 0.65 + 0.35 * sin(uTime * 2.8);
     color += uAccent * uHover * fresnel * 1.5;
     color += uAccent * uHover * pulse * 0.12;
-
-    // Selected: persistent subtle glow
     color += uAccent * uSelected * 0.07;
     color += uAccent * uSelected * fresnel * 0.5;
 
@@ -59,10 +55,8 @@ const muscleFragShader = /* glsl */ `
 
 const structuralFragShader = /* glsl */ `
   uniform float uTime;
-
   varying vec3 vNormal;
   varying vec3 vViewPosition;
-
   void main() {
     vec3 viewDir = normalize(vViewPosition);
     float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), 2.5);
@@ -74,140 +68,138 @@ const structuralFragShader = /* glsl */ `
 `;
 
 // ─────────────────────────────────────────────
-// Geometry Helper
+// Procedural Geometry (Fallback)
 // ─────────────────────────────────────────────
 
 function PartGeometry({ type, args }: { type: string; args: number[] }) {
   switch (type) {
-    case "sphere":
-      return <sphereGeometry args={args as [number, number, number]} />;
-    case "capsule":
-      return (
-        <capsuleGeometry args={args as [number, number, number, number]} />
-      );
-    case "box":
-      return <boxGeometry args={args as [number, number, number]} />;
-    case "cylinder":
-      return (
-        <cylinderGeometry args={args as [number, number, number, number]} />
-      );
-    default:
-      return <sphereGeometry args={[0.05, 16, 16]} />;
+    case "sphere": return <sphereGeometry args={args as [number, number, number]} />;
+    case "capsule": return <capsuleGeometry args={args as [number, number, number, number]} />;
+    case "box": return <boxGeometry args={args as [number, number, number]} />;
+    case "cylinder": return <cylinderGeometry args={args as [number, number, number, number]} />;
+    default: return <sphereGeometry args={[0.05, 16, 16]} />;
   }
 }
 
-// ─────────────────────────────────────────────
-// Single Muscle Piece (mesh + custom shader)
-// ─────────────────────────────────────────────
-
-function MusclePiece({
-  part,
-  isHovered,
-  isSelected,
-  onPointerOver,
-  onPointerOut,
-  onClick,
-}: {
-  part: MusclePartDef;
-  isHovered: boolean;
-  isSelected: boolean;
-  onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
-  onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
-  onClick: (e: ThreeEvent<MouseEvent>) => void;
-}) {
+function MusclePiece({ part, isHovered, isSelected, onPointerOver, onPointerOut, onClick }: any) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-
-  const uniforms = useMemo(
-    () => ({
-      uTime: { value: 0 },
-      uHover: { value: 0 },
-      uSelected: { value: 0 },
-      uAccent: { value: new THREE.Color("#ff5500") },
-    }),
-    []
-  );
+  const uniforms = useMemo(() => ({
+    uTime: { value: 0 },
+    uHover: { value: 0 },
+    uSelected: { value: 0 },
+    uAccent: { value: new THREE.Color("#ff5500") },
+  }), []);
 
   useFrame((state) => {
     if (!matRef.current) return;
     const u = matRef.current.uniforms;
     u.uTime.value = state.clock.elapsedTime;
-    u.uHover.value = THREE.MathUtils.lerp(
-      u.uHover.value,
-      isHovered ? 1 : 0,
-      0.08
-    );
-    u.uSelected.value = THREE.MathUtils.lerp(
-      u.uSelected.value,
-      isSelected ? 1 : 0,
-      0.08
-    );
+    u.uHover.value = THREE.MathUtils.lerp(u.uHover.value, isHovered ? 1 : 0, 0.08);
+    u.uSelected.value = THREE.MathUtils.lerp(u.uSelected.value, isSelected ? 1 : 0, 0.08);
   });
 
   return (
-    <mesh
-      position={part.position}
-      rotation={part.rotation || [0, 0, 0]}
-      scale={part.scale || [1, 1, 1]}
-      onPointerOver={onPointerOver}
-      onPointerOut={onPointerOut}
-      onClick={onClick}
-    >
+    <mesh position={part.position} rotation={part.rotation || [0, 0, 0]} scale={part.scale || [1, 1, 1]}
+      onPointerOver={onPointerOver} onPointerOut={onPointerOut} onClick={onClick}>
       <PartGeometry type={part.type} args={part.args} />
-      <shaderMaterial
-        ref={matRef}
-        uniforms={uniforms}
-        vertexShader={vertexShader}
-        fragmentShader={muscleFragShader}
-      />
+      <shaderMaterial ref={matRef} uniforms={uniforms} vertexShader={vertexShader} fragmentShader={muscleFragShader} />
+    </mesh>
+  );
+}
+
+function StructuralPiece({ part }: { part: MusclePartDef }) {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(() => ({ uTime: { value: 0 } }), []);
+  useFrame((state) => { if (matRef.current) matRef.current.uniforms.uTime.value = state.clock.elapsedTime; });
+  return (
+    <mesh position={part.position} rotation={part.rotation || [0, 0, 0]} scale={part.scale || [1, 1, 1]}>
+      <PartGeometry type={part.type} args={part.args} />
+      <shaderMaterial ref={matRef} uniforms={uniforms} vertexShader={vertexShader} fragmentShader={structuralFragShader} />
     </mesh>
   );
 }
 
 // ─────────────────────────────────────────────
-// Structural Piece (non-interactive body fill)
+// Realistic GLB Body Component (Target)
 // ─────────────────────────────────────────────
 
-function StructuralPiece({ part }: { part: MusclePartDef }) {
-  const matRef = useRef<THREE.ShaderMaterial>(null);
+function RealisticBody({ onSelect, selectedId, onHover, targetRotation }: any) {
+  // Try to load the model. If it fails (404), useGLTF throws, so this component must be wrapped in ErrorBoundary.
+  const { scene } = useGLTF("/models/body.glb");
+  const groupRef = useRef<THREE.Group>(null);
 
-  const uniforms = useMemo(
-    () => ({
-      uTime: { value: 0 },
-    }),
-    []
-  );
+  // Apply custom shaders to the realistic model nodes
+  useEffect(() => {
+    if (!scene) return;
+    scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        // Here we would apply the shader material to the loaded meshes.
+        // And hook up pointer events based on the mesh names (e.g. child.name === "chest").
+        // For now we just apply the structural shader as a placeholder since we don't know the node names.
+        const mesh = child as THREE.Mesh;
+        mesh.material = new THREE.ShaderMaterial({
+          vertexShader,
+          fragmentShader: structuralFragShader,
+          uniforms: { uTime: { value: 0 } }
+        });
+      }
+    });
+  }, [scene]);
 
   useFrame((state) => {
-    if (matRef.current) {
-      matRef.current.uniforms.uTime.value = state.clock.elapsedTime;
+    if (groupRef.current) {
+      groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotation, 0.04);
     }
   });
 
   return (
-    <mesh
-      position={part.position}
-      rotation={part.rotation || [0, 0, 0]}
-      scale={part.scale || [1, 1, 1]}
-    >
-      <PartGeometry type={part.type} args={part.args} />
-      <shaderMaterial
-        ref={matRef}
-        uniforms={uniforms}
-        vertexShader={vertexShader}
-        fragmentShader={structuralFragShader}
-      />
-    </mesh>
+    <group ref={groupRef}>
+      <primitive object={scene} scale={[0.1, 0.1, 0.1]} />
+    </group>
   );
 }
 
 // ─────────────────────────────────────────────
-// Ambient Floating Particles
+// The Fallback Procedural Body
+// ─────────────────────────────────────────────
+
+function FallbackProceduralBody({ onSelect, selectedId, targetRotation, onHover }: any) {
+  const groupRef = useRef<THREE.Group>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  useFrame(() => {
+    if (groupRef.current) {
+      groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotation, 0.04);
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={[0, -0.1, 0]}>
+      {STRUCTURAL_PARTS.map((part, i) => <StructuralPiece key={`s-${i}`} part={part} />)}
+      {MUSCLE_GROUPS.map((group) =>
+        group.parts.map((part, pi) => (
+          <MusclePiece
+            key={`${group.id}-${pi}`}
+            part={part}
+            isHovered={hoveredId === group.id}
+            isSelected={selectedId === group.id}
+            onPointerOver={(e: any) => { e.stopPropagation(); setHoveredId(group.id); onHover(group.id); document.body.style.cursor = "pointer"; }}
+            onPointerOut={() => { setHoveredId(null); onHover(null); document.body.style.cursor = "auto"; }}
+            onClick={(e: any) => { e.stopPropagation(); onSelect(selectedId === group.id ? null : group.id); }}
+          />
+        ))
+      )}
+    </group>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Environment / Particles
 // ─────────────────────────────────────────────
 
 function FloatingParticles() {
   const count = 80;
   const ref = useRef<THREE.Points>(null);
-
   const geometry = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
@@ -223,168 +215,75 @@ function FloatingParticles() {
   useFrame((state) => {
     if (ref.current) {
       ref.current.rotation.y = state.clock.elapsedTime * 0.012;
-      ref.current.rotation.x =
-        Math.sin(state.clock.elapsedTime * 0.008) * 0.08;
+      ref.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.008) * 0.08;
     }
   });
 
   return (
     <points ref={ref} geometry={geometry}>
-      <pointsMaterial
-        size={0.01}
-        color="#444"
-        transparent
-        opacity={0.35}
-        sizeAttenuation
-      />
+      <pointsMaterial size={0.01} color="#444" transparent opacity={0.35} sizeAttenuation />
     </points>
   );
 }
 
 // ─────────────────────────────────────────────
-// Body Scene (renders all parts + handles hover)
+// Main Component
 // ─────────────────────────────────────────────
 
-function BodyScene({
-  onSelect,
-  selectedId,
-  targetRotation,
-  onHover,
-}: {
-  onSelect: (id: string | null) => void;
-  selectedId: string | null;
-  targetRotation: number;
-  onHover: (id: string | null) => void;
-}) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const groupRef = useRef<THREE.Group>(null);
-
-  // Smooth rotation between front/back
-  useFrame(() => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(
-        groupRef.current.rotation.y,
-        targetRotation,
-        0.04
-      );
-    }
-  });
-
-  return (
-    <group ref={groupRef}>
-      {/* Structural fill (non-interactive) */}
-      {STRUCTURAL_PARTS.map((part, i) => (
-        <StructuralPiece key={`s-${i}`} part={part} />
-      ))}
-
-      {/* Interactive muscle groups */}
-      {MUSCLE_GROUPS.map((group) =>
-        group.parts.map((part, pi) => (
-          <MusclePiece
-            key={`${group.id}-${pi}`}
-            part={part}
-            isHovered={hoveredId === group.id}
-            isSelected={selectedId === group.id}
-            onPointerOver={(e) => {
-              e.stopPropagation();
-              setHoveredId(group.id);
-              onHover(group.id);
-              document.body.style.cursor = "pointer";
-            }}
-            onPointerOut={() => {
-              setHoveredId(null);
-              onHover(null);
-              document.body.style.cursor = "auto";
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(selectedId === group.id ? null : group.id);
-            }}
-          />
-        ))
-      )}
-    </group>
-  );
-}
-
-// ─────────────────────────────────────────────
-// Exported Component
-// ─────────────────────────────────────────────
-
-export default function BodyModel({
-  onSelectMuscle,
-  selectedMuscle,
-  onHoverMuscle,
-}: {
-  onSelectMuscle: (id: string | null) => void;
-  selectedMuscle: string | null;
-  onHoverMuscle?: (id: string | null) => void;
-}) {
+export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscle }: any) {
   const [isFront, setIsFront] = useState(true);
+  const [hasRealisticModel, setHasRealisticModel] = useState(false);
 
-  // Clean up cursor on unmount
   useEffect(() => {
-    return () => {
-      document.body.style.cursor = "auto";
-    };
+    return () => { document.body.style.cursor = "auto"; };
+  }, []);
+
+  useEffect(() => {
+    // Check if user has uploaded the realistic model yet
+    fetch('/models/body.glb', { method: 'HEAD' })
+      .then(res => {
+        if (res.ok) setHasRealisticModel(true);
+      })
+      .catch(() => setHasRealisticModel(false));
   }, []);
 
   return (
     <div className="relative w-full h-full">
-      <Canvas
-        camera={{ position: [0, 0.15, 2.2], fov: 50 }}
-        gl={{ antialias: true, alpha: true }}
-        style={{ background: "transparent" }}
-      >
+      <Canvas camera={{ position: [0, 0.15, 2.2], fov: 50 }} gl={{ antialias: true, alpha: true }} style={{ background: "transparent" }}>
         <ambientLight intensity={0.08} />
         <directionalLight position={[3, 4, 2]} intensity={0.12} color="#fff" />
-        <directionalLight
-          position={[-2, 1, -3]}
-          intensity={0.06}
-          color="#aaaaff"
-        />
+        <directionalLight position={[-2, 1, -3]} intensity={0.06} color="#aaaaff" />
 
-        <BodyScene
-          onSelect={onSelectMuscle}
-          selectedId={selectedMuscle}
-          targetRotation={isFront ? 0 : Math.PI}
-          onHover={onHoverMuscle || (() => {})}
-        />
+        {hasRealisticModel ? (
+          <RealisticBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+        ) : (
+          <FallbackProceduralBody onSelect={onSelectMuscle} selectedId={selectedMuscle} onHover={onHoverMuscle} targetRotation={isFront ? 0 : Math.PI} />
+        )}
 
         <FloatingParticles />
-
-        <OrbitControls
-          enableZoom={false}
-          enablePan={false}
-          minPolarAngle={Math.PI / 3}
-          maxPolarAngle={(Math.PI * 2) / 3}
-          rotateSpeed={0.5}
-        />
+        <OrbitControls enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 3} maxPolarAngle={(Math.PI * 2) / 3} rotateSpeed={0.5} />
       </Canvas>
 
       {/* Front / Back Toggle */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-0.5 bg-[#0a0a0a]/80 backdrop-blur-xl border border-white/10 rounded-full p-0.5">
-        <button
-          onClick={() => setIsFront(true)}
-          className={`px-4 py-1.5 text-[10px] font-medium rounded-full transition-all ${
-            isFront
-              ? "bg-white/10 text-white"
-              : "text-gray-500 hover:text-gray-300"
-          }`}
-        >
+        <button onClick={() => setIsFront(true)} className={`px-4 py-1.5 text-[10px] font-medium rounded-full transition-all ${isFront ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"}`}>
           Front
         </button>
-        <button
-          onClick={() => setIsFront(false)}
-          className={`px-4 py-1.5 text-[10px] font-medium rounded-full transition-all ${
-            !isFront
-              ? "bg-white/10 text-white"
-              : "text-gray-500 hover:text-gray-300"
-          }`}
-        >
+        <button onClick={() => setIsFront(false)} className={`px-4 py-1.5 text-[10px] font-medium rounded-full transition-all ${!isFront ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"}`}>
           Back
         </button>
       </div>
+
+      {/* Awaiting Asset Indicator */}
+      {!hasRealisticModel && (
+        <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-md border border-[#ff5500]/30 rounded-xl p-3 flex flex-col gap-1 pointer-events-none">
+          <span className="text-[10px] text-[#ff5500] font-mono uppercase tracking-wider flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#ff5500] animate-pulse" />
+            Awaiting Realistic Asset
+          </span>
+          <span className="text-[9px] text-gray-500">Place body.glb in /public/models/</span>
+        </div>
+      )}
     </div>
   );
 }

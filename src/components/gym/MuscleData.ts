@@ -169,3 +169,55 @@ export const MUSCLE_DETAILS: Record<string, MuscleInfo> = {
   hamstrings: { name: 'Hamstrings', lastTrained: '4 days ago', soreness: 45, weeklyVolume: 10, exercises: ['RDL', 'Leg Curl', 'Nordic Curl'] },
   calves:     { name: 'Calves',     lastTrained: '6 days ago', soreness: 0,  weeklyVolume: 8,  exercises: ['Standing Calf Raise', 'Seated Calf Raise'] },
 };
+
+// ─── Extended Gym Dashboard Data (To be replaced by Prisma) ───
+
+export interface RoutineExercise {
+  id: string;
+  name: string;
+  sets: number;
+  reps: string;
+  targetRpe?: number;
+}
+
+export interface SessionHistory {
+  id: string;
+  date: string;
+  routineName: string;
+  duration: string;
+  totalVolume: number; // in kg
+}
+
+export interface PersonalRecord {
+  id: string;
+  lift: string;
+  weight: number; // in kg
+  date: string;
+}
+
+export const MOCK_CURRENT_ROUTINE = {
+  name: "Push Hypertrophy",
+  day: "Day 1 of 4",
+  exercises: [
+    { id: "e1", name: "Incline Dumbbell Press", sets: 3, reps: "8-10", targetRpe: 8 },
+    { id: "e2", name: "Flat Barbell Bench", sets: 3, reps: "8-12", targetRpe: 8 },
+    { id: "e3", name: "Seated Machine Fly", sets: 3, reps: "12-15", targetRpe: 9 },
+    { id: "e4", name: "Overhead Tricep Extension", sets: 4, reps: "10-12", targetRpe: 8 },
+    { id: "e5", name: "Lateral Raises", sets: 4, reps: "15-20", targetRpe: 9 },
+  ] as RoutineExercise[]
+};
+
+export const MOCK_SESSION_HISTORY: SessionHistory[] = [
+  { id: "s1", date: "Today", routineName: "Pull Power", duration: "1h 15m", totalVolume: 12450 },
+  { id: "s2", date: "Yesterday", routineName: "Legs Volume", duration: "1h 30m", totalVolume: 18200 },
+  { id: "s3", date: "3 days ago", routineName: "Push Hypertrophy", duration: "1h 10m", totalVolume: 11200 },
+  { id: "s4", date: "4 days ago", routineName: "Pull Volume", duration: "1h 20m", totalVolume: 13500 },
+  { id: "s5", date: "6 days ago", routineName: "Legs Power", duration: "1h 45m", totalVolume: 21000 },
+];
+
+export const MOCK_PRS: PersonalRecord[] = [
+  { id: "pr1", lift: "Bench Press", weight: 110, date: "2 weeks ago" },
+  { id: "pr2", lift: "Squat", weight: 160, date: "1 month ago" },
+  { id: "pr3", lift: "Deadlift", weight: 190, date: "3 months ago" },
+  { id: "pr4", lift: "Overhead Press", weight: 75, date: "2 weeks ago" },
+];
