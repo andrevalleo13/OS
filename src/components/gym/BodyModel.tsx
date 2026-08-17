@@ -2,6 +2,7 @@
 
 import { Canvas, useFrame, ThreeEvent, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { useRef, useState, useMemo, useEffect, Suspense } from "react";
 import * as THREE from "three";
 import gsap from "gsap";
@@ -31,7 +32,6 @@ const muscleFragShader = /* glsl */ `
   uniform float uTime;
   uniform float uHover;
   uniform float uSelected;
-  uniform float uHitboxMode;
   uniform vec3 uAccent;
 
   varying vec3 vNormal;
@@ -39,27 +39,30 @@ const muscleFragShader = /* glsl */ `
 
   void main() {
     vec3 viewDir = normalize(vViewPosition);
-    float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), 2.5);
+    float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), 2.0); // Sharper fresnel
 
-    vec3 base = vec3(0.04, 0.04, 0.045);
-    vec3 edge = vec3(0.14, 0.14, 0.17);
-    vec3 color = mix(base, edge, fresnel * 0.6);
+    // Dark sleek base
+    vec3 base = vec3(0.02, 0.02, 0.025);
+    vec3 edge = vec3(0.12, 0.12, 0.15);
+    vec3 color = mix(base, edge, fresnel * 0.8);
 
-    float pulse = 0.65 + 0.35 * sin(uTime * 2.8);
-    color += uAccent * uHover * fresnel * 1.5;
-    color += uAccent * uHover * pulse * 0.12;
-    color += uAccent * uSelected * 0.07;
-    color += uAccent * uSelected * fresnel * 0.5;
+    // Holographic scanlines moving upwards
+    float scanline = sin(vViewPosition.y * 80.0 - uTime * 6.0) * 0.5 + 0.5;
+    float pulse = 0.5 + 0.5 * sin(uTime * 3.0);
 
-    float alpha = 1.0;
-    if (uHitboxMode > 0.5) {
-      float intensity = (uHover * 0.4) + (uSelected * 0.6);
-      // AR Overlay Effect: pure additive energy with fresnel rim
-      color = uAccent * fresnel * intensity * 3.0;
-      alpha = intensity * (fresnel + 0.2); // slight base alpha + rim glow
-    }
+    // Extremely intense glowing rim for hovered
+    vec3 hoverGlow = uAccent * fresnel * 3.0 * uHover;
+    // Solid energy core for selected
+    vec3 selectGlow = uAccent * (fresnel + 0.5) * 1.5 * uSelected;
+    
+    // Mix scanlines specifically into the glow
+    color += hoverGlow + (uAccent * scanline * 0.5 * uHover);
+    color += selectGlow;
+    
+    // Add a tiny bit of ambient pulse if selected
+    color += uAccent * uSelected * pulse * 0.2;
 
-    gl_FragColor = vec4(color, alpha);
+    gl_FragColor = vec4(color, 1.0);
   }
 `;
 
@@ -249,27 +252,39 @@ function CameraController({ selectedMuscle, controlsRef }: any) {
   useEffect(() => {
     let targetPos = [0, 0.15, 2.2];
     let targetLook = [0, 0, 0];
+    let targetFov = 50; // default wide angle
 
     if (selectedMuscle && MUSCLE_CAMERA_TARGETS[selectedMuscle]) {
       targetPos = MUSCLE_CAMERA_TARGETS[selectedMuscle].pos;
       targetLook = MUSCLE_CAMERA_TARGETS[selectedMuscle].target;
+      targetFov = 35; // Cinematic tight zoom
     }
 
+    // Zoom and position
     gsap.to(camera.position, {
       x: targetPos[0],
       y: targetPos[1],
       z: targetPos[2],
       duration: 1.2,
-      ease: "power4.inOut",
+      ease: "power3.inOut",
     });
 
+    // Dynamic FOV Warp
+    gsap.to(camera, {
+      fov: targetFov,
+      duration: 1.2,
+      ease: "power3.inOut",
+      onUpdate: () => camera.updateProjectionMatrix()
+    });
+
+    // Target tracking
     if (controlsRef.current) {
       gsap.to(controlsRef.current.target, {
         x: targetLook[0],
         y: targetLook[1],
         z: targetLook[2],
         duration: 1.2,
-        ease: "power4.inOut",
+        ease: "power3.inOut",
       });
     }
   }, [selectedMuscle, camera, controlsRef]);
@@ -304,6 +319,16 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
         <FloatingParticles />
         <CameraController selectedMuscle={selectedMuscle} controlsRef={controlsRef} />
         <OrbitControls ref={controlsRef} enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 3} maxPolarAngle={(Math.PI * 2) / 3} rotateSpeed={0.5} />
+        
+        {/* Cinematic Post-Processing */}
+        <EffectComposer enableNormalPass={false}>
+          <Bloom 
+            luminanceThreshold={0.2} 
+            mipmapBlur 
+            intensity={1.2} 
+          />
+          <Vignette eskil={false} offset={0.1} darkness={1.1} />
+        </EffectComposer>
       </Canvas>
 
       {/* Front / Back Toggle */}
