@@ -56,7 +56,13 @@ const PATHS = {
   }
 };
 
-export default function ShadowOrb({ status = 'idle' }: { status?: 'idle' | 'thinking' | 'speaking' }) {
+export default function ShadowOrb({ 
+  status = 'idle',
+  hideBackground = false
+}: { 
+  status?: 'idle' | 'thinking' | 'speaking';
+  hideBackground?: boolean;
+}) {
   const isSpeaking = status === 'speaking';
   const isThinking = status === 'thinking';
   const isActive = isSpeaking || isThinking;
@@ -85,7 +91,7 @@ export default function ShadowOrb({ status = 'idle' }: { status?: 'idle' | 'thin
       <motion.div
         animate={{
           scale: isSpeaking ? [1, 1.08, 0.97, 1] : isThinking ? [1, 0.96, 1.02, 1] : [1, 1.01, 1],
-          borderRadius: isSpeaking 
+          borderRadius: hideBackground ? "50%" : isSpeaking 
             ? ["28%", "34%", "26%", "28%"] 
             : isThinking 
               ? ["28%", "32%", "28%"] 
@@ -103,63 +109,67 @@ export default function ShadowOrb({ status = 'idle' }: { status?: 'idle' | 'thin
             ease: "easeInOut" 
           },
         }}
-        className="relative w-full h-full aspect-square overflow-hidden flex items-center justify-center"
+        className={`relative w-full h-full aspect-square flex items-center justify-center ${hideBackground ? '' : 'overflow-hidden'}`}
         style={{
-          boxShadow: isActive 
+          boxShadow: hideBackground ? 'none' : isActive 
             ? "0 0 40px rgba(255,255,255,0.06), inset 0 0 30px rgba(0,0,0,0.8)" 
             : "0 0 20px rgba(0,0,0,0.4), inset 0 0 30px rgba(0,0,0,0.8)",
         }}
       >
-        {/* Rotating fluid background — the "alive" feel */}
-        <motion.div
-          animate={{ rotate: [0, 360] }}
-          transition={{ 
-            duration: isSpeaking ? 3 : isThinking ? 2 : 20, 
-            repeat: Infinity, 
-            ease: "linear" 
-          }}
-          className="absolute w-[250%] h-[250%]"
-          style={{
-            background: `conic-gradient(
-              from 0deg,
-              #080808 0%,
-              #1a1a1a 15%,
-              #2a2a2a 25%,
-              #111111 35%,
-              #333333 45%,
-              #0d0d0d 55%,
-              #222222 65%,
-              #151515 75%,
-              #2d2d2d 85%,
-              #080808 100%
-            )`,
-            filter: "blur(12px)",
-          }}
-        />
+        {!hideBackground && (
+          <>
+            {/* Rotating fluid background — the "alive" feel */}
+            <motion.div
+              animate={{ rotate: [0, 360] }}
+              transition={{ 
+                duration: isSpeaking ? 3 : isThinking ? 2 : 20, 
+                repeat: Infinity, 
+                ease: "linear" 
+              }}
+              className="absolute w-[250%] h-[250%]"
+              style={{
+                background: `conic-gradient(
+                  from 0deg,
+                  #080808 0%,
+                  #1a1a1a 15%,
+                  #2a2a2a 25%,
+                  #111111 35%,
+                  #333333 45%,
+                  #0d0d0d 55%,
+                  #222222 65%,
+                  #151515 75%,
+                  #2d2d2d 85%,
+                  #080808 100%
+                )`,
+                filter: "blur(12px)",
+              }}
+            />
 
-        {/* Counter-rotating second fluid layer */}
-        <motion.div
-          animate={{ rotate: [360, 0] }}
-          transition={{ 
-            duration: isSpeaking ? 4 : isThinking ? 3 : 25, 
-            repeat: Infinity, 
-            ease: "linear" 
-          }}
-          className="absolute w-[200%] h-[200%] opacity-60"
-          style={{
-            background: `conic-gradient(
-              from 180deg,
-              transparent 0%,
-              #3a3a3a 20%,
-              transparent 40%,
-              #4a4a4a 60%,
-              transparent 80%,
-              #3a3a3a 100%
-            )`,
-            filter: "blur(16px)",
-            mixBlendMode: "screen",
-          }}
-        />
+            {/* Counter-rotating second fluid layer */}
+            <motion.div
+              animate={{ rotate: [360, 0] }}
+              transition={{ 
+                duration: isSpeaking ? 4 : isThinking ? 3 : 25, 
+                repeat: Infinity, 
+                ease: "linear" 
+              }}
+              className="absolute w-[200%] h-[200%] opacity-60"
+              style={{
+                background: `conic-gradient(
+                  from 180deg,
+                  transparent 0%,
+                  #3a3a3a 20%,
+                  transparent 40%,
+                  #4a4a4a 60%,
+                  transparent 80%,
+                  #3a3a3a 100%
+                )`,
+                filter: "blur(16px)",
+                mixBlendMode: "screen",
+              }}
+            />
+          </>
+        )}
 
         {/* Inner depth shadow */}
         <div 
