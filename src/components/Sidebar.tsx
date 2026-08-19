@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ScanFace, Box, BarChart2, Settings, Search, ChevronRight, Wand2, Dumbbell } from "lucide-react";
+import { Home, ScanFace, Box, BarChart2, Settings, Search, ChevronRight, Wand2, Dumbbell, Utensils, GraduationCap } from "lucide-react";
 import ShadowOrb from "./ShadowOrb";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
@@ -20,20 +20,22 @@ export default function Sidebar() {
   const buttonRef = useRef<HTMLDivElement>(null);
 
   const items = [
-    { icon: Home, label: "Home", href: "/" },
+    { icon: Home, label: "Inicio", href: "/" },
     { icon: Wand2, label: "Shadow", href: "/shadow" },
-    { icon: ScanFace, label: "Biometrics", href: "/biometrics" },
+    { icon: ScanFace, label: "Biometría", href: "/biometrics" },
     { icon: Box, label: "Obsidian", href: "/obsidian" },
-    { icon: Dumbbell, label: "Gym", href: "/gym" },
-    { icon: BarChart2, label: "Finances", href: "/finances" },
+    { icon: Dumbbell, label: "Gimnasio", href: "/gym" },
+    { icon: Utensils, label: "Nutrición", href: "/food" },
+    { icon: GraduationCap, label: "Universidad", href: "/uni" },
+    { icon: BarChart2, label: "Finanzas", href: "/finances" },
   ];
 
   useGSAP(() => {
     // 1. Sidebar Width Animation (Super smooth spring-like feel using Power4)
     gsap.to(sidebarRef.current, {
       width: isExpanded ? 240 : 64,
-      duration: 0.7,
-      ease: "power4.inOut",
+      duration: 0.45,
+      ease: "power3.inOut",
     });
 
     // 2. Chevron Rotation
@@ -96,7 +98,7 @@ export default function Sidebar() {
             className="ml-3 flex-1 hidden opacity-0"
           >
             <div className="flex items-center w-full">
-              <span className="text-xs font-normal text-gray-500">Search</span>
+              <span className="text-xs font-normal text-gray-500">Buscar</span>
               <div className="ml-auto flex items-center gap-1 opacity-50">
                 <kbd className="text-[9px] bg-[#1a1a1a] border border-[#222] text-gray-500 px-1 py-0.5 rounded-[4px] font-mono">⌘</kbd>
                 <kbd className="text-[9px] bg-[#1a1a1a] border border-[#222] text-gray-500 px-1 py-0.5 rounded-[4px] font-mono">G</kbd>
@@ -141,7 +143,7 @@ export default function Sidebar() {
             ref={(el) => { if (el) textRefs.current[items.length + 1] = el; }}
             className="ml-3 text-sm font-medium whitespace-nowrap hidden opacity-0"
           >
-            Settings
+            Ajustes
           </span>
         </button>
 

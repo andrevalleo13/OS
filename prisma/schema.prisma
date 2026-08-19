@@ -25,6 +25,7 @@ model ExerciseLog {
   sets      Int
   reps      String   // e.g., "8-10"
   rpe       Int?
+  weight    Float?   // kg
   muscleId  String   // e.g., "chest"
   sessionId String
   session   WorkoutSession @relation(fields: [sessionId], references: [id])
@@ -38,6 +39,7 @@ model BiometricLog {
   sleep     Float?   // hours
   hrv       Int?     // Heart Rate Variability
   calories  Int?
+  steps     Int?     // daily steps
 }
 
 // Finanzas
@@ -48,4 +50,53 @@ model Transaction {
   type      String   // "INCOME" | "EXPENSE"
   category  String
   note      String?
+}
+
+// Nutrición (Nutrition)
+model FoodLog {
+  id          String   @id @default(uuid())
+  date        DateTime @default(now())
+  description String   // Original text, e.g. "2 eggs and toast"
+  calories    Int
+  protein     Float
+  carbs       Float
+  fat         Float
+  water       Float    @default(0) // en litros
+  breakdown   Json?    // Detailed breakdown per ingredient
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  name        String
+  professor   String?
+  schedule    String?      // e.g., "Lun/Mie 10:00"
+  color       String       @default("#ff5500")
+  currentGrade Float?      @default(0) // percentage 0-100
+  absences    Int          @default(0)
+  maxAbsences Int          @default(6)
+  assignments Assignment[]
+  createdAt   DateTime     @default(now())
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  title       String
+  dueDate     DateTime
+  status      String   @default("pending") // pending, in-progress, done
+  weight      Float?   // percentage of final grade
+  grade       Float?   // score received
+  
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id])
+  
+  createdAt   DateTime @default(now())
+}
+
+// Second Brain (Notas)
+model Note {
+  id        String   @id @default(uuid())
+  title     String
+  content   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

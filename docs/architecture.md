@@ -1,24 +1,29 @@
-# Architecture Rules & Implementation
+# Reglas de Arquitectura e Implementación
 
-## Core Stack
-- **Framework**: Next.js 14 App Router (`src/app`). All routes are server components by default unless interactive.
-- **Styling**: Tailwind CSS. Avoid arbitrary values unless absolutely necessary for precision.
-- **Icons**: Lucide React (`lucide-react`).
-- **Animations**: Framer Motion (`framer-motion`) and GSAP (`gsap`, `@gsap/react`).
-- **3D & WebGL**: Three.js wrapped via `@react-three/fiber` and `@react-three/drei`. Custom GLSL shaders used for material logic.
-- **State**: Zustand (`useUIStore`) for cross-component UI state (e.g., Sidebar expansion).
-- **Data Fetching**: SWR for client-side data fetching to ensure real-time responsiveness.
+## Stack Principal
+- **Framework**: Next.js 14 App Router (`src/app`). Todas las rutas son server components por defecto a menos que requieran interactividad.
+- **Estilos**: Tailwind CSS. Evita usar valores arbitrarios a menos que sea absolutamente necesario para precisión.
+- **Íconos**: Lucide React (`lucide-react`).
+- **Animaciones**: Framer Motion (`framer-motion`) y GSAP (`gsap`, `@gsap/react`).
+- **3D y WebGL**: Three.js encapsulado vía `@react-three/fiber` y `@react-three/drei`. Se usan shaders personalizados de GLSL para la lógica de los materiales.
+- **Estado**: Zustand (`useUIStore`) para el estado de UI cruzado entre componentes (ej. expansión de la barra lateral).
+- **Obtención de Datos**: SWR para la obtención de datos del lado del cliente, asegurando respuesta en tiempo real.
 
-## Phase 3 Database Roadmap (Pending)
-We will use **Prisma ORM** with **SQLite** for local persistence to ensure absolute privacy and speed.
-- `schema.prisma` will define:
-  - `Workout` / `Exercise` models.
-  - `Expense` / `Income` models.
-  - `BiometricLog` models.
-- Next.js Route Handlers (`src/app/api/...`) will act as the controller layer.
+## Hoja de Ruta de Base de Datos
+Usamos **Prisma ORM** con **PostgreSQL/Neon** para la persistencia.
+- `schema.prisma` define:
+  - Modelos de `Workout` / `Exercise`.
+  - Modelos de `FoodLog` (Nutrición y Agua).
+  - Modelos de `BiometricLog`.
+  - Modelos de `Note` para el Second Brain.
+  - Modelos de `Transaction` para el Cash Flow.
+- Se usan Next.js Server Actions en la carpeta `src/actions` como la capa de controladores.
 
-## The "Shadow" AI Agent
-Shadow is the core entity of ValleOS.
-- Visually represented by the `ShadowOrb` component.
-- The `CommandPalette` (`⌘+G`) is the primary textual interface for talking to Shadow from anywhere.
-- Future integration requires an LLM endpoint (e.g., local Ollama or OpenAI API) to power the reasoning and NLP extraction capabilities.
+## La IA "Shadow"
+Shadow es la entidad central de ValleOS.
+- Representada visualmente por el componente `ShadowOrb` y `ShadowWidget`.
+- **Activación por Voz (Wake Word)**: Utiliza `SpeechRecognition` nativo en el navegador para escuchar constantemente. Se activa al decir la palabra "Shadow".
+- **Conciencia del Entorno**: Conectada a la API de Geolocalización y Open-Meteo para entender clima y hora del día.
+- La paleta de comandos (`CommandPalette` con `⌘+G` o `⌘+K`) sirve como interfaz alternativa a la voz.
+- Toda su comunicación, prompts internos de análisis y respuestas para el usuario deben generarse exclusivamente en español.
+- Utiliza la API de Anthropic (Claude 3) para la extracción de NLP y capacidades de razonamiento.

@@ -15,8 +15,8 @@ export default function MainWrapper({ children }: { children: React.ReactNode })
     // Animate the main content padding so it smoothly gets pushed by the sidebar
     gsap.to(mainRef.current, {
       paddingLeft: isSidebarExpanded ? 240 + 32 : 64 + 32, // Width of sidebar + 16px left gap + 16px gap to content
-      duration: 0.7,
-      ease: "power4.inOut",
+      duration: 0.45,
+      ease: "power3.inOut",
     });
   }, [isSidebarExpanded]);
 

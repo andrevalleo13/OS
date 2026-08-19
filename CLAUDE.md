@@ -1,27 +1,27 @@
-# ValleOS Dashboard - AI Guidelines
+# Dashboard de ValleOS - Directrices de la IA
 
-Welcome to ValleOS. When assisting with this project, you must adhere strictly to these global directives. Failure to do so breaks the core product vision.
+Bienvenido a ValleOS. Al asistir en este proyecto, debes adherirte estrictamente a estas directrices globales. No hacerlo rompe la visión central del producto.
 
-## 1. Aesthetic Directives (The "Stealth Vercel" Look)
-- **Zero Clutter**: NEVER use large `<h1>` or `<h2>` page headers on canvas components. Context is provided solely by the `Topbar` breadcrumbs and visual layout.
-- **Iconography**: ALWAYS use `lucide-react`. Never use Radix, Heroicons, or Material.
-- **Color Palette**: Stick to a strict grayscale theme (`#0a0a0a`, `#111`, `#1a1a1a`, `#222`). Highlights are pure white (`#ffffff`) or extremely desaturated tones. The only exceptions are specific branding accents (like the `#ff5500` ValleOS accent or specific gradient blobs).
-- **Typography**: Extremely tight and small. `text-[10px]` to `text-sm` is preferred. Monospace (`font-mono`) should be used for data, percentages, and logs.
-- **Glassmorphism**: Use `backdrop-blur-3xl` and translucent backgrounds (`bg-black/90` or `bg-[#0a0a0a]/95`) combined with ultra-thin borders (`border-white/10` or `border-[#222]`) for overlays, dropdowns, and sidebars.
+## 1. Directrices Estéticas (El Look "Stealth Vercel")
+- **Cero Desorden**: NUNCA uses encabezados grandes `<h1>` o `<h2>` en componentes tipo canvas. El contexto lo proporciona únicamente el componente `Topbar` (breadcrumbs) y la disposición visual.
+- **Iconografía**: SIEMPRE usa `lucide-react`. Nunca uses Radix, Heroicons o Material.
+- **Paleta de Colores**: Mantén un tema estricto en escala de grises (`#0a0a0a`, `#111`, `#1a1a1a`, `#222`). Los resaltes son blanco puro (`#ffffff`) o tonos extremadamente desaturados. Las únicas excepciones son acentos específicos de la marca (como el acento `#ff5500` de ValleOS o los gradientes dinámicos del orbe).
+- **Tipografía**: Extremadamente ajustada y pequeña. Se prefiere `text-[10px]` a `text-sm`. Se debe usar monoespaciada (`font-mono`) para datos, porcentajes y registros.
+- **Glassmorfismo**: Usa `backdrop-blur-3xl` y fondos translúcidos (`bg-black/90` o `bg-[#0a0a0a]/95`) combinados con bordes ultra delgados (`border-white/10` o `border-[#222]`) para overlays, menús desplegables y barras laterales.
 
-## 2. Animation Guidelines
-- **Framer Motion**: Almost all layout mounts/unmounts should use `framer-motion` (`AnimatePresence`, `motion.div`). Keep transitions fast and snappy (`duration: 0.15` to `0.3`, `easeOut` or springs).
-- **GSAP**: Reserved for complex coordinated timelines (like the Sidebar expand/collapse text staggers). Do not mix GSAP and Framer Motion on the exact same properties.
+## 2. Pautas de Animación
+- **Framer Motion**: Casi todos los montajes/desmontajes de diseño deben usar `framer-motion` (`AnimatePresence`, `motion.div`). Mantén las transiciones rápidas y ágiles (`duration: 0.15` a `0.3`, `easeOut` o springs).
+- **GSAP**: Reservado para líneas de tiempo coordinadas complejas (como la cascada de texto al expandir/colapsar la barra lateral). No mezcles GSAP y Framer Motion en las mismas propiedades exactas.
 
-## 3. WebGL & 3D Integration
-- **Libraries**: Use `@react-three/fiber` and `@react-three/drei` for all 3D canvas rendering.
-- **Performance**: Ensure heavy `.glb` assets are loaded with `<Suspense>` boundaries to prevent Next.js crashes.
-- **Interactivity**: For complex meshes where individual muscle raycasting isn't possible natively, use transparent procedural overlays ("AR Hitboxes") to restore pointer interactions.
+## 3. Integración 3D y WebGL
+- **Librerías**: Usa `@react-three/fiber` y `@react-three/drei` para todo el renderizado 3D en canvas.
+- **Rendimiento**: Asegúrate de que los archivos pesados `.glb` se carguen con límites de `<Suspense>` para evitar que Next.js colapse.
+- **Interactividad**: Para mallas complejas donde el raycasting de músculos individuales no es posible de forma nativa, usa overlays procedimentales transparentes ("Hitboxes AR") para restaurar las interacciones del puntero.
 
-## 4. Architecture Rules
+## 4. Reglas de Arquitectura
 - **Framework**: Next.js 14 App Router.
-- **State**: Zustand for global UI state (`useUIStore`). SWR for data fetching and real-time dashboard updates.
-- **Database**: Prisma + SQLite (Phase 3).
-- **Identity**: The system AI is explicitly named **"Shadow"**. It manifests as an ever-present, fluid visual element (`ShadowOrb`) and a central command interface.
+- **Estado**: Zustand para estado global de UI (`useUIStore`). SWR para obtención de datos y actualizaciones en tiempo real del dashboard.
+- **Base de Datos**: Prisma + SQLite / Postgres (Fase 3).
+- **Identidad**: La IA del sistema se llama explícitamente **"Shadow"**. Se manifiesta como un elemento visual fluido y siempre presente (`ShadowOrb`) y como una interfaz de comandos centralizada. Todo su texto y respuestas deben ser en español.
 
-*For detailed breakdowns, see the `/docs/` folder.*
+*Para desgloses detallados, consulta la carpeta `/docs/`.*

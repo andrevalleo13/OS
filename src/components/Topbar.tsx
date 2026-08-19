@@ -130,7 +130,7 @@ function SystemStatsIndicator({ sysStats }: { sysStats: any }) {
             {/* CPU Details */}
             <div className="flex flex-col gap-1.5">
               <div className="flex justify-between items-baseline">
-                <span className="text-[11px] font-medium text-gray-300">CPU Usage</span>
+                <span className="text-[11px] font-medium text-gray-300">Uso de CPU</span>
                 <span className="text-[10px] text-gray-500 font-mono tracking-tight">{cpuPercent}%</span>
               </div>
               <div className="w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
@@ -143,14 +143,14 @@ function SystemStatsIndicator({ sysStats }: { sysStats: any }) {
               </div>
               <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
                 <span>ValleOS Core</span>
-                <span>{100 - cpuPercent}% Idle</span>
+                <span>{100 - cpuPercent}% Libre</span>
               </div>
             </div>
 
             {/* RAM Details */}
             <div className="flex flex-col gap-1.5">
               <div className="flex justify-between items-baseline">
-                <span className="text-[11px] font-medium text-gray-300">Memory</span>
+                <span className="text-[11px] font-medium text-gray-300">Memoria</span>
                 <span className="text-[10px] text-gray-500 font-mono tracking-tight">{usedRam}GB / {totalRam}GB</span>
               </div>
               <div className="w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
@@ -163,7 +163,7 @@ function SystemStatsIndicator({ sysStats }: { sysStats: any }) {
               </div>
               <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
                 <span>Chrome (2.1G)</span>
-                <span>{(totalRam - usedRam).toFixed(1)}GB Free</span>
+                <span>{(totalRam - usedRam).toFixed(1)}GB Libres</span>
               </div>
             </div>
 
@@ -182,7 +182,13 @@ export default function Topbar() {
 
   // Calculate page name from pathname
   const formatPageName = (path: string) => {
-    if (path === '/') return 'Home';
+    if (path === '/') return 'Inicio';
+    if (path.startsWith('/food')) return 'Nutrición';
+    if (path.startsWith('/gym')) return 'Gimnasio';
+    if (path.startsWith('/biometrics')) return 'Biometría';
+    if (path.startsWith('/finances')) return 'Finanzas';
+    if (path.startsWith('/shadow')) return 'Shadow';
+    if (path.startsWith('/obsidian')) return 'Obsidian';
     const name = path.replace('/', '').replace('-', ' ');
     return name.charAt(0).toUpperCase() + name.slice(1);
   };
@@ -213,8 +219,8 @@ export default function Topbar() {
     // Animate the left offset of the topbar to not overlap with the sidebar
     gsap.to(topbarRef.current, {
       left: isSidebarExpanded ? 240 + 32 : 64 + 32, // Sidebar width + 16px gap + 16px offset
-      duration: 0.7,
-      ease: "power4.inOut",
+      duration: 0.45,
+      ease: "power3.inOut",
     });
   }, [isSidebarExpanded]);
 
