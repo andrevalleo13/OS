@@ -2,19 +2,14 @@
 
 import { useState, useEffect, useRef } from "react";
 import ShadowOrb from "@/components/ShadowOrb";
-import { Activity, Wand2, MessageSquare, ChevronRight } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { containerVariants, itemVariants } from "@/lib/animations";
 import { askShadow } from "@/app/actions/shadow";
 
 export default function ShadowPage() {
   const [status, setStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [inputValue, setInputValue] = useState('');
-  const [logs, setLogs] = useState<string[]>([
-    "[SYS] Quantum Core Initialized.",
-    "[SYS] Neural pathways active.",
-    "[SYS] Awaiting wake word 'Shadow'..."
-  ]);
+  const [logs, setLogs] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll logs
@@ -28,7 +23,6 @@ export default function ShadowPage() {
     setInputValue('');
     setStatus('thinking');
     setLogs(prev => [...prev, `[USR] ${command}`]);
-    setLogs(prev => [...prev, `[NLP] Parsing intent matrix...`]);
 
     try {
       const result = await askShadow(command);
@@ -40,11 +34,9 @@ export default function ShadowPage() {
 
       setTimeout(() => {
         setStatus('idle');
-        setLogs(prev => [...prev, `[SYS] Awaiting input.`]);
       }, speakingDuration);
     } catch (e) {
       setStatus('idle');
-      setLogs(prev => [...prev, `[ERR] Cognitive flux disrupted.`]);
     }
   };
 
@@ -54,7 +46,7 @@ export default function ShadowPage() {
   };
 
   return (
-    <div className="w-full flex-1 relative bg-[#000] rounded-[32px] border border-white/[0.02] text-[#ededed] overflow-hidden flex flex-col font-sans selection:bg-white/20 mt-4 shadow-2xl">
+    <div className="w-full flex-1 relative bg-[#000] rounded-[32px] border border-white/[0.02] text-[#ededed] overflow-hidden flex flex-col items-center justify-center font-sans selection:bg-white/20 mt-4 shadow-2xl pb-24">
       
       {/* Background Ambient Glow matching state */}
       <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[150px] pointer-events-none transition-all duration-[2000ms] ease-in-out
@@ -64,52 +56,52 @@ export default function ShadowPage() {
           'bg-white/[0.01] scale-100'}`} 
       />
 
-      <div className="flex-1 relative z-10 flex flex-col items-center justify-center mt-12">
+      {/* Central Interface */}
+      <div className="relative z-10 flex flex-col items-center justify-center">
         <motion.div 
           animate={{ scale: status === 'listening' ? 1.05 : 1 }}
-          className="relative w-[400px] h-[400px] flex items-center justify-center"
+          className="relative w-[360px] h-[360px] flex items-center justify-center mb-8"
         >
           <ShadowOrb status={status === 'listening' ? 'idle' : status} hideBackground={true} />
         </motion.div>
 
         {/* Live Subtitles / Context */}
-        <div className="h-24 mt-8 flex items-center justify-center">
+        <div className="h-20 flex items-center justify-center">
           <AnimatePresence mode="wait">
             <motion.p 
               key={status}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="text-xl font-light tracking-tight text-white/60 max-w-2xl text-center px-8"
+              className="text-2xl font-light tracking-tight text-white/80 max-w-2xl text-center px-8"
             >
-              {status === 'idle' && "Awaiting instructions."}
-              {status === 'listening' && <span className="text-[#ff5500]">Listening...</span>}
-              {status === 'thinking' && "Parsing cognitive stream..."}
-              {status === 'speaking' && "Executing."}
+              {status === 'idle' && "Hola Andre. ¿En qué te puedo ayudar?"}
+              {status === 'listening' && <span className="text-[#ff5500]">Escuchando...</span>}
+              {status === 'thinking' && "Procesando solicitud..."}
+              {status === 'speaking' && logs.length > 0 ? logs[logs.length - 1].replace('[SHDW] ', '') : "Ejecutando."}
             </motion.p>
           </AnimatePresence>
         </div>
       </div>
 
-      {/* Bottom HUD: Command Input Only */}
-      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-8">
-        <form onSubmit={handleCommandSubmit} className="relative group w-full">
-          <div className="absolute inset-0 bg-white/[0.02] rounded-2xl transition-colors group-hover:bg-white/[0.04]" />
-          <div className="absolute inset-0 rounded-2xl border border-white/[0.05] group-focus-within:border-white/[0.15] transition-colors" />
+      {/* Bottom HUD: Minimalist Command Input */}
+      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-8">
+        <form onSubmit={handleCommandSubmit} className="relative group w-full flex items-center">
+          <div className="absolute inset-0 bg-[#0a0a0a] rounded-[24px] border border-white/[0.06] shadow-2xl transition-all group-focus-within:border-white/[0.15]" />
           <input 
             type="text" 
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Initialize command sequence..." 
-            className="w-full bg-transparent border-none outline-none text-base text-[#ededed] px-6 py-4 placeholder:text-white/20"
+            placeholder="Pregúntale a Shadow..." 
+            className="w-full bg-transparent border-none outline-none text-lg text-[#ededed] px-8 py-5 placeholder:text-white/20 z-10"
             disabled={status === 'thinking'}
           />
           <button 
-            type="button"
-            onClick={() => setStatus(status === 'listening' ? 'idle' : 'listening')}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-colors ${status === 'listening' ? 'bg-[#ff5500]/20 text-[#ff5500]' : 'text-white/30 hover:bg-white/[0.05] hover:text-white/80'}`}
+            type="submit"
+            disabled={!inputValue.trim() || status === 'thinking'}
+            className="absolute right-4 z-10 p-2.5 rounded-full bg-white text-black hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 transition-all flex items-center justify-center"
           >
-            <Wand2 className="w-4 h-4" />
+            <ArrowUp className="w-5 h-5 stroke-[2.5]" />
           </button>
         </form>
       </div>

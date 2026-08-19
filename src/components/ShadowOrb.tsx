@@ -171,23 +171,23 @@ export default function ShadowOrb({
           </>
         )}
 
-        {/* Inner depth shadow */}
-        <div 
-          className="absolute inset-0 z-10 pointer-events-none"
-          style={{
-            boxShadow: "inset 0 0 40px rgba(0,0,0,0.9), inset 0 2px 0 rgba(255,255,255,0.03)",
-          }}
-        />
+            {/* Inner depth shadow */}
+            <div 
+              className="absolute inset-0 z-10 pointer-events-none"
+              style={{
+                boxShadow: "inset 0 0 40px rgba(0,0,0,0.9), inset 0 2px 0 rgba(255,255,255,0.03)",
+              }}
+            />
 
-        {/* Subtle top highlight (glass reflection) */}
-        <div 
-          className="absolute top-0 left-[15%] right-[15%] h-[35%] z-10 pointer-events-none rounded-b-full opacity-[0.04]"
-          style={{
-            background: "linear-gradient(180deg, rgba(255,255,255,0.8) 0%, transparent 100%)",
-          }}
-        />
-
-        {/* The Face — Linear/Apple Abstract Morphing Geometry */}
+            {/* Subtle top highlight (glass reflection) */}
+            <div 
+              className="absolute top-0 left-[15%] right-[15%] h-[35%] z-10 pointer-events-none rounded-b-full opacity-[0.04]"
+              style={{
+                background: "linear-gradient(180deg, rgba(255,255,255,0.8) 0%, transparent 100%)",
+              }}
+            />
+          </>
+        )}
         <motion.svg
           viewBox="0 0 100 100"
           className="relative z-20 w-[60%] h-[60%]"
