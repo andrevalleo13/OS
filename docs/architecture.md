@@ -19,11 +19,10 @@ Usamos **Prisma ORM** con **PostgreSQL/Neon** para la persistencia.
   - Modelos de `Transaction` para el Cash Flow.
 - Se usan Next.js Server Actions en la carpeta `src/actions` como la capa de controladores.
 
-## La IA "Shadow"
-Shadow es la entidad central de ValleOS.
-- Representada visualmente por el componente `ShadowOrb` y `ShadowWidget`.
-- **Activación por Voz (Wake Word)**: Utiliza `SpeechRecognition` nativo en el navegador para escuchar constantemente. Se activa al decir la palabra "Shadow".
-- **Conciencia del Entorno**: Conectada a la API de Geolocalización y Open-Meteo para entender clima y hora del día.
-- La paleta de comandos (`CommandPalette` con `⌘+G` o `⌘+K`) sirve como interfaz alternativa a la voz.
-- Toda su comunicación, prompts internos de análisis y respuestas para el usuario deben generarse exclusivamente en español.
-- Utiliza la API de Anthropic (Claude 3) para la extracción de NLP y capacidades de razonamiento.
+## La IA "Shadow" (El Cerebro)
+Shadow es la entidad central y el motor de NLP de ValleOS.
+- Representada visualmente por el componente `ShadowOrb`.
+- **Ruta Dedicada (`/shadow`)**: Es el HUD principal (Heads Up Display). Utiliza un diseño de sala de control cinemático con registros de flujo cognitivo en tiempo real y paneles de telemetría, prescindiendo del grid clásico.
+- **Activación por Voz (Wake Word)**: Utiliza `SpeechRecognition` nativo en el navegador para escuchar. Se activa al decir la palabra "Shadow".
+- **Router Global NLP**: La lógica de servidor en `src/actions/shadow.ts` sirve como el enrutador inteligente. Se conecta a Claude 3 (Anthropic) y expone herramientas (`tool_use` o Function Calling) para que el LLM ejecute acciones directas en la base de datos Prisma basadas en lenguaje natural estructurado.
+- Toda su comunicación interna y respuesta visual está programada en español como alter-ego digital del usuario.

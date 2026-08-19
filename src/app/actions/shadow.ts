@@ -46,15 +46,56 @@ Status: Pending integration.
       model: "claude-3-5-haiku-20241022",
       max_tokens: 1024,
       system: systemPrompt,
+      tools: [
+        {
+          name: "add_expense",
+          description: "Registra un nuevo gasto financiero en la base de datos.",
+          input_schema: {
+            type: "object",
+            properties: {
+              amount: { type: "number", description: "Monto del gasto (positivo)" },
+              description: { type: "string", description: "Descripción corta (ej. 'Oxxo', 'Uber')" }
+            },
+            required: ["amount", "description"]
+          }
+        }
+      ],
       messages: [
         { role: "user", content: message }
       ],
     });
 
-    // Extract text content from response
     let responseText = "";
-    if (response.content[0].type === "text") {
-      responseText = response.content[0].text;
+    
+    // Check if Claude wants to use a tool
+    if (response.stop_reason === "tool_use") {
+      const toolUse = response.content.find(c => c.type === "tool_use");
+      if (toolUse && toolUse.name === "add_expense") {
+        const input = toolUse.input as { amount: number, description: string };
+        
+        try {
+          // Dynamic import to avoid circular dependencies if any
+          const { addTransaction } = await import("@/actions/finance");
+          await addTransaction({
+            amount: -Math.abs(input.amount),
+            description: input.description,
+            type: 'EXPENSE',
+            category: 'OTHER',
+            date: new Date()
+          });
+          responseText = `Gasto de $${input.amount} en ${input.description} registrado exitosamente en la base de datos de Prisma.`;
+        } catch (e) {
+          responseText = `Intenté registrar el gasto de $${input.amount}, pero la base de datos rechazó la conexión.`;
+        }
+      } else {
+        responseText = "He detectado tu intención, pero el protocolo de escritura aún no está enlazado a la base de datos de producción.";
+      }
+    } else {
+      // Normal conversational response
+      const textBlock = response.content.find(c => c.type === "text");
+      if (textBlock && textBlock.type === "text") {
+        responseText = textBlock.text;
+      }
     }
 
     return { success: true, text: responseText };

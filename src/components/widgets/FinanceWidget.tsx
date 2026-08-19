@@ -54,9 +54,9 @@ export default function FinanceWidget({ itemVariants }: any) {
   return (
     <WidgetCard 
       id="finance"
-      defaultClassName="col-span-1 flex flex-col justify-between min-h-[200px] h-full"
-      expandedClassName="col-span-1 lg:col-span-2 row-span-2 flex flex-col justify-between min-h-[400px] h-full"
-      shrunkClassName="col-span-1 flex flex-col justify-between min-h-[200px] h-full"
+      defaultClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[220px]"
+      expandedClassName="col-span-1 md:col-span-4 flex flex-col justify-between min-h-[400px]"
+      shrunkClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[140px]"
     >
       <motion.div layout className="z-10 flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">

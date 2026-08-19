@@ -15,9 +15,9 @@ export default function GymWidget({ itemVariants }: any) {
     <WidgetCard 
       id="gym"
       onClick={() => setIsActive(!isActive)}
-      defaultClassName="col-span-1 lg:col-span-2 flex flex-col justify-between min-h-[200px] h-full transition-all"
-      expandedClassName="col-span-1 lg:col-span-4 row-span-2 flex flex-col justify-between min-h-[400px] h-full transition-all"
-      shrunkClassName="col-span-1 flex flex-col justify-between min-h-[200px] h-full transition-all"
+      defaultClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[420px]"
+      expandedClassName="col-span-1 md:col-span-4 flex flex-col justify-between min-h-[400px]"
+      shrunkClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[140px]"
     >
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[1px] bg-gradient-to-r from-transparent via-white/[0.15] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       

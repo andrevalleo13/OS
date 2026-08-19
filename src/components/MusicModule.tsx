@@ -91,9 +91,9 @@ export default function MusicModule({ itemVariants }: any) {
   return (
     <WidgetCard 
       id="music"
-      defaultClassName="col-span-1 lg:col-span-2 flex flex-col justify-between h-full"
-      expandedClassName="col-span-1 lg:col-span-2 flex flex-col justify-between h-full"
-      shrunkClassName="col-span-1 flex flex-col justify-between h-full"
+      defaultClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[220px]"
+      expandedClassName="col-span-1 md:col-span-4 flex flex-col justify-between min-h-[400px]"
+      shrunkClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[140px]"
     >
       <div 
         ref={glowRef}

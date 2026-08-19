@@ -37,7 +37,7 @@ export default function Home() {
         initial="hidden"
         animate="visible"
         variants={containerVariants}
-        className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 auto-rows-[auto] relative z-10"
+        className="w-full grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 auto-rows-[auto] relative z-10"
       >
         
         {/* The JARVIS Core - Always top and spans full width */}

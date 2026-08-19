@@ -36,9 +36,16 @@
 - **Wake Word API**: Desarrollo del hook `useWakeWord` con la API de `SpeechRecognition` nativa del navegador para activar a Shadow diciendo "Shadow".
 - **Context Awareness**: El `ShadowWidget` ahora obtiene la geolocalización del dispositivo y consulta la API de Open-Meteo para proveer un saludo contextual (clima, hora del día).
 
-## Fase 4: Integración de Datos Backend
-*Estado: PENDIENTE*
+## Fase 4: Routing Global NLP y Conexión de Prisma
+*Estado: COMPLETADO*
 
-- Expandir la base de datos de PostgreSQL/Neon con endpoints de Finanzas.
-- Conectar la bóveda local de Obsidian.
-- Conectar `ShadowOrb` a un pipeline de LLM conversacional.
+- **NLP Router**: Implementación del Server Action `src/actions/shadow.ts` conectado a Anthropic Claude 3.5 Haiku.
+- **Anthropic Tool Calling**: El router NLP extrae intenciones (`add_expense`) desde entradas de lenguaje natural (ej. "Gasté 300 pesos en Oxxo") e inyecta los datos de manera directa y dinámica en la base de datos de Prisma usando importaciones de servidor en tiempo de ejecución.
+
+## Fase 5: El Cerebro (Shadow Core Revamp & HUD)
+*Estado: COMPLETADO*
+
+- **Diseño HUD**: La ruta `/shadow` fue reescrita por completo. Se eliminó la cuadrícula bento a favor de una Interfaz de Usuario "Heads-Up Display" (HUD) inmersiva estilo sala de servidores, siguiendo la estética Vercel/Linear estricta.
+- **Glow Ambiental**: El brillo de fondo reacciona directamente al estado cognitivo de Shadow (`listening`, `thinking`, `speaking`) con transiciones fluidas de 2000ms.
+- **Telemetría Fluida**: Paneles laterales limpios con datos de geolocalización y un flujo cognitivo ("Cognitive Flux") auto-scrolleable en la parte inferior izquierda que muestra los registros internos y "pensamientos" del servidor.
+- **Input Híbrido**: Integración combinada de teclado y botón mágico que permitirá más adelante la integración de `useWakeWord` dentro del HUD, soportando entrada de texto continuo de la mano del NLP router.
