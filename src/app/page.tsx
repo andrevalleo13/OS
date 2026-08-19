@@ -41,7 +41,7 @@ export default function Home() {
       >
         
         {/* The JARVIS Core - Always top and spans full width */}
-        <ShadowWidget itemVariants={itemVariants} />
+        <ShadowWidget />
 
         {/* Dynamic Layout based on Time of Day */}
         {timeOfDay === "morning" && (

@@ -172,7 +172,7 @@ export async function getMonthlyHistory() {
 
   // Group by day (YYYY-MM-DD)
   const dailyTotals: Record<string, number> = {};
-  logs.forEach(log => {
+  logs.forEach((log: any) => {
     const day = log.date.toISOString().split('T')[0];
     dailyTotals[day] = (dailyTotals[day] || 0) + log.calories;
   });

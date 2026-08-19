@@ -3,6 +3,13 @@
 import { useEffect, useState, useRef } from "react";
 import { useWidget } from "@/components/ui/widget";
 
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
 export function useWakeWord() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");

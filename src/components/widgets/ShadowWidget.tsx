@@ -102,7 +102,7 @@ export default function ShadowWidget() {
       </div>
 
       {/* The Core / Face of Shadow */}
-      <motion.div layout className={`relative z-10 flex flex-col items-center ${isShrunk ? 'gap-4' : 'gap-8'} w-full`}>
+      <motion.div className={`relative z-10 flex flex-col items-center ${isShrunk ? 'gap-4' : 'gap-8'} w-full`}>
         <motion.div 
           animate={{ 
             scale: isExpanded ? [1.2, 1.3, 1.2] : [1, 1.05, 1], 
@@ -129,7 +129,7 @@ export default function ShadowWidget() {
         </motion.div>
 
         {/* Text Area */}
-        <motion.div layout className="flex flex-col items-center gap-3">
+        <motion.div className="flex flex-col items-center gap-3">
           <div className="flex items-center gap-2">
             <span className={`w-1 h-1 rounded-full animate-pulse ${isExpanded ? 'bg-red-500' : 'bg-[#888]'}`} />
             <span className={`font-mono text-[10px] uppercase tracking-[0.3em] ${isExpanded ? 'text-red-400' : 'text-[#666]'}`}>

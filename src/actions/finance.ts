@@ -13,7 +13,7 @@ export async function getTransactions() {
     // Calculate simple balance (Mocking a starting balance + incomes - expenses)
     // Real app would sum everything.
     const startBalance = 4200;
-    const spentThisWeek = txs.filter(t => t.type === 'EXPENSE').reduce((acc, t) => acc + t.amount, 0);
+    const spentThisWeek = txs.filter((t: any) => t.type === 'EXPENSE').reduce((acc: number, t: any) => acc + t.amount, 0);
     const balance = startBalance - spentThisWeek;
     
     return { transactions: txs, balance, spentThisWeek };

@@ -26,7 +26,7 @@ export async function getGymData() {
     const lifetimeVolume = aggregate._sum.volume || 0;
     const totalWorkouts = aggregate._count.id;
 
-    const sessionHistory: SessionHistory[] = sessions.map((session) => ({
+    const sessionHistory: SessionHistory[] = sessions.map((session: any) => ({
       id: session.id,
       date: getRelativeTime(session.date),
       routineName: session.title,
