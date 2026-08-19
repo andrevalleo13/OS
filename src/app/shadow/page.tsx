@@ -57,16 +57,16 @@ export default function ShadowPage() {
       />
 
       {/* Central Interface */}
-      <div className="relative z-10 flex flex-col items-center justify-center">
+      <div className="flex-1 relative z-10 flex flex-col items-center justify-center w-full">
         <motion.div 
           animate={{ scale: status === 'listening' ? 1.05 : 1 }}
-          className="relative w-[360px] h-[360px] flex items-center justify-center mb-8"
+          className="relative w-[360px] h-[360px] flex items-center justify-center mb-4"
         >
           <ShadowOrb status={status === 'listening' ? 'idle' : status} hideBackground={true} />
         </motion.div>
 
         {/* Live Subtitles / Context */}
-        <div className="h-20 flex items-center justify-center">
+        <div className="h-16 flex items-center justify-center">
           <AnimatePresence mode="wait">
             <motion.p 
               key={status}
@@ -85,9 +85,9 @@ export default function ShadowPage() {
       </div>
 
       {/* Bottom HUD: Minimalist Command Input */}
-      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-8">
+      <div className="w-full max-w-2xl z-30 px-8 pb-12">
         <form onSubmit={handleCommandSubmit} className="relative group w-full flex items-center">
-          <div className="absolute inset-0 bg-[#0a0a0a] rounded-[24px] border border-white/[0.06] shadow-2xl transition-all group-focus-within:border-white/[0.15]" />
+          <div className="absolute inset-0 bg-[#0a0a0a] rounded-[24px] border border-white/[0.06] shadow-2xl transition-all group-focus-within:border-white/[0.15] group-focus-within:bg-[#0f0f0f]" />
           <input 
             type="text" 
             value={inputValue}
@@ -99,7 +99,7 @@ export default function ShadowPage() {
           <button 
             type="submit"
             disabled={!inputValue.trim() || status === 'thinking'}
-            className="absolute right-4 z-10 p-2.5 rounded-full bg-white text-black hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 transition-all flex items-center justify-center"
+            className="absolute right-3 z-10 p-2.5 rounded-full bg-white text-black hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 transition-all flex items-center justify-center"
           >
             <ArrowUp className="w-5 h-5 stroke-[2.5]" />
           </button>
