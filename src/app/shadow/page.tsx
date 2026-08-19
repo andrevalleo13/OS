@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import ShadowOrb from "@/components/ShadowOrb";
 import { Activity, Wand2, MessageSquare, ChevronRight } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { containerVariants, itemVariants } from "@/lib/animations";
 import { askShadow } from "@/app/actions/shadow";
 
