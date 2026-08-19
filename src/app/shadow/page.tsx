@@ -78,14 +78,14 @@ export default function ShadowPage() {
               {status === 'idle' && "Hola Andre. ¿En qué te puedo ayudar?"}
               {status === 'listening' && <span className="text-[#ff5500]">Escuchando...</span>}
               {status === 'thinking' && "Procesando solicitud..."}
-              {status === 'speaking' && logs.length > 0 ? logs[logs.length - 1].replace('[SHDW] ', '') : "Ejecutando."}
+              {status === 'speaking' && (logs.length > 0 ? logs[logs.length - 1].replace('[SHDW] ', '') : "Ejecutando.")}
             </motion.p>
           </AnimatePresence>
         </div>
       </div>
 
       {/* Bottom HUD: Minimalist Command Input */}
-      <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-8">
+      <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-full max-w-2xl z-30 px-8">
         <form onSubmit={handleCommandSubmit} className="relative group w-full flex items-center">
           <div className="absolute inset-0 bg-[#0a0a0a] rounded-[24px] border border-white/[0.06] shadow-2xl transition-all group-focus-within:border-white/[0.15]" />
           <input 

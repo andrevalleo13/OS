@@ -31,7 +31,7 @@ function MusicIsland({ music }: { music: any }) {
     }
   };
 
-  if (!music) return null;
+  if (!music || !music.albumArt || music.albumArt === '') return null;
 
   return (
     <motion.div 
