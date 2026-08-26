@@ -1,266 +1,171 @@
 "use client";
 
-import { Bell, SkipBack, SkipForward, Play, Pause } from "lucide-react";
-import { useEffect, useState, useRef } from "react";
-import gsap from "gsap";
-import { useGSAP } from "@gsap/react";
-import { useUIStore } from "@/store/useUIStore";
-import useSWR, { useSWRConfig } from "swr";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bell, Check, ChevronRight, CircleAlert, Mic, MicOff, Pause, Play, Search, Server, Settings2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
+import { useUIStore } from "@/store/useUIStore";
+import { useShadowVoice } from "@/components/shadow/ShadowVoiceProvider";
 
-gsap.registerPlugin(useGSAP);
+type SystemStats = { cpu: number; ram: string; totalRam?: string };
+type ReadyState = { status: "ready" | "degraded"; checks: Record<string, boolean> };
+type MusicState = { playing?: boolean; albumArt?: string; title?: string; artist?: string };
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const fetcher = async <T,>(url: string): Promise<T> => {
+  const response = await fetch(url);
+  const body = await response.json();
+  if (!response.ok && response.status !== 503) throw new Error(body?.message ?? `Error ${response.status}`);
+  return body;
+};
 
-function MusicIsland({ music }: { music: any }) {
-  const [isHovered, setIsHovered] = useState(false);
-  const { mutate } = useSWRConfig();
-
-  const handleControl = async (e: React.MouseEvent, action: string) => {
-    e.stopPropagation();
-    try {
-      await fetch('/api/music/control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
-      });
-      mutate("/api/music");
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  if (!music || !music.albumArt || music.albumArt === '') return null;
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className="relative flex items-center bg-[#111]/80 backdrop-blur-xl border border-[#222] rounded-full p-1.5 shadow-2xl cursor-pointer hover:bg-[#1a1a1a] transition-colors overflow-hidden"
-    >
-      <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0">
-        <img src={music.albumArt} alt="cover" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-black/20 rounded-full border border-white/10" />
-      </div>
-      
-      <AnimatePresence mode="wait" initial={false}>
-        {isHovered ? (
-          <motion.div 
-            key="controls"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: "auto", opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="flex items-center gap-2 px-3 overflow-hidden whitespace-nowrap shrink-0"
-          >
-            <button onClick={(e) => handleControl(e, 'previous')} className="text-gray-400 hover:text-white p-1 transition-colors">
-              <SkipBack className="w-4 h-4" />
-            </button>
-            <button onClick={(e) => handleControl(e, 'playpause')} className="text-white p-1 transition-transform active:scale-90">
-              {music.playing ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white" />}
-            </button>
-            <button onClick={(e) => handleControl(e, 'next')} className="text-gray-400 hover:text-white p-1 transition-colors">
-              <SkipForward className="w-4 h-4" />
-            </button>
-          </motion.div>
-        ) : (
-          music.playing && (
-            <motion.div 
-              key="eq"
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: "auto", opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="flex items-center justify-center pl-3 pr-2 overflow-hidden shrink-0"
-            >
-              <div className="flex items-end gap-[2px] h-3">
-                 <motion.div className="w-[2px] bg-white rounded-t" animate={{ height: ["4px", "12px", "4px"] }} transition={{ duration: 0.6, repeat: Infinity, ease: "linear" }} />
-                 <motion.div className="w-[2px] bg-white rounded-t" animate={{ height: ["12px", "4px", "12px"] }} transition={{ duration: 0.6, repeat: Infinity, ease: "linear", delay: 0.2 }} />
-                 <motion.div className="w-[2px] bg-white rounded-t" animate={{ height: ["6px", "10px", "6px"] }} transition={{ duration: 0.6, repeat: Infinity, ease: "linear", delay: 0.4 }} />
-              </div>
-            </motion.div>
-          )
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-function SystemStatsIndicator({ sysStats }: { sysStats: any }) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  // Mock total RAM for calculation (e.g. 16G)
-  const usedRam = sysStats ? parseFloat(sysStats.ram) : 0;
-  const totalRam = 16.0;
-  const ramPercent = (usedRam / totalRam) * 100;
-  
-  const cpuPercent = sysStats ? sysStats.cpu : 0;
-
-  return (
-    <div 
-      className="relative flex items-center h-full mr-2"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div className="flex items-center gap-3 text-xs font-mono text-gray-500 cursor-default hover:text-gray-300 transition-colors">
-        <div className="flex items-center gap-1">
-          <span>CPU</span>
-          <span className="text-gray-300">{sysStats ? `${sysStats.cpu}%` : '--%'}</span>
-        </div>
-        <div className="w-1 h-1 bg-[#333] rounded-full" />
-        <div className="flex items-center gap-1">
-          <span>RAM</span>
-          <span className="text-gray-300">{sysStats ? sysStats.ram : '--G'}</span>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {isHovered && (
-          <motion.div 
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="absolute top-full right-0 mt-3 w-56 bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 rounded-xl p-3.5 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.8)] z-50 flex flex-col gap-4 cursor-default"
-          >
-            {/* CPU Details */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between items-baseline">
-                <span className="text-[11px] font-medium text-gray-300">Uso de CPU</span>
-                <span className="text-[10px] text-gray-500 font-mono tracking-tight">{cpuPercent}%</span>
-              </div>
-              <div className="w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-white rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${cpuPercent}%` }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
-                <span>ValleOS Core</span>
-                <span>{100 - cpuPercent}% Libre</span>
-              </div>
-            </div>
-
-            {/* RAM Details */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between items-baseline">
-                <span className="text-[11px] font-medium text-gray-300">Memoria</span>
-                <span className="text-[10px] text-gray-500 font-mono tracking-tight">{usedRam}GB / {totalRam}GB</span>
-              </div>
-              <div className="w-full h-[2px] bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-white rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${ramPercent}%` }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
-                <span>Chrome (2.1G)</span>
-                <span>{(totalRam - usedRam).toFixed(1)}GB Libres</span>
-              </div>
-            </div>
-
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+const pageNames: Record<string, string> = {
+  "/": "Centro de mando",
+  "/calendar": "Calendario",
+  "/shadow": "Shadow",
+  "/shadow/memory": "Memoria",
+  "/shadow/autonomy": "Autonomía",
+  "/biometrics": "Biometría",
+  "/obsidian": "Obsidian",
+  "/gym": "Gimnasio",
+  "/food": "Nutrición",
+  "/uni": "Universidad",
+  "/finances": "Finanzas",
+  "/settings": "Ajustes",
+};
 
 export default function Topbar() {
-  const [time, setTime] = useState("");
-  const isSidebarExpanded = useUIStore((state) => state.isSidebarExpanded);
-  const topbarRef = useRef<HTMLElement>(null);
+  const voice = useShadowVoice();
   const pathname = usePathname();
-
-  // Calculate page name from pathname
-  const formatPageName = (path: string) => {
-    if (path === '/') return 'Inicio';
-    if (path.startsWith('/food')) return 'Nutrición';
-    if (path.startsWith('/gym')) return 'Gimnasio';
-    if (path.startsWith('/biometrics')) return 'Biometría';
-    if (path.startsWith('/finances')) return 'Finanzas';
-    if (path.startsWith('/shadow')) return 'Shadow';
-    if (path.startsWith('/obsidian')) return 'Obsidian';
-    const name = path.replace('/', '').replace('-', ' ');
-    return name.charAt(0).toUpperCase() + name.slice(1);
-  };
-  const pageName = formatPageName(pathname);
-
-  // Poll system stats every 3 seconds
-  const { data: sysStats } = useSWR("/api/system", fetcher, { 
-    refreshInterval: 3000,
-    revalidateOnFocus: true
-  });
-
-  // Poll music state (shares cache with MusicModule)
-  const { data: music } = useSWR("/api/music", fetcher, { 
-    refreshInterval: 2000,
-  });
+  const isSidebarExpanded = useUIStore((state) => state.isSidebarExpanded);
+  const showSystemMetrics = useUIStore((state) => state.showSystemMetrics);
+  const showStatusDetails = useUIStore((state) => state.showStatusDetails);
+  const [time, setTime] = useState("");
+  const [centerOpen, setCenterOpen] = useState(false);
+  const { data: stats } = useSWR<SystemStats>("/api/system", fetcher, { refreshInterval: 5000, keepPreviousData: true });
+  const { data: ready, isLoading: readyLoading } = useSWR<ReadyState>("/api/ready", fetcher, { refreshInterval: 30000, shouldRetryOnError: false });
+  const { data: music } = useSWR<MusicState>("/api/music", fetcher, { refreshInterval: 2500, shouldRetryOnError: false });
 
   useEffect(() => {
-    // Set initial time
-    setTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-    
-    const interval = setInterval(() => {
-      setTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-    }, 1000);
-    return () => clearInterval(interval);
+    const update = () => setTime(new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date()));
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
-  useGSAP(() => {
-    // Animate the left offset of the topbar to not overlap with the sidebar
-    gsap.to(topbarRef.current, {
-      left: isSidebarExpanded ? 240 + 32 : 64 + 32, // Sidebar width + 16px gap + 16px offset
-      duration: 0.45,
-      ease: "power3.inOut",
-    });
-  }, [isSidebarExpanded]);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => event.key === "Escape" && setCenterOpen(false);
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, []);
+
+  const pageName = pageNames[pathname] ?? pageNames[Object.keys(pageNames).find((key) => key !== "/" && pathname.startsWith(`${key}/`)) ?? ""] ?? "ValleOS";
+  const healthy = ready?.status === "ready";
+  const openPalette = () => document.dispatchEvent(new CustomEvent("valleos:command-palette"));
+  const voiceActive = voice.enabled && voice.phase !== "blocked" && voice.phase !== "unsupported";
+  const voiceLabel = voice.phase === "listening" ? "Escuchando" : voice.phase === "processing" ? "Pensando" : voice.phase === "speaking" ? "Hablando" : voiceActive ? "Voz activa" : "Voz pausada";
 
   return (
-    <header 
-      ref={topbarRef} 
-      className="fixed top-4 right-4 h-14 bg-[#0a0a0a]/90 backdrop-blur-2xl border border-[#1a1a1a] shadow-2xl shadow-black/50 rounded-[32px] flex items-center justify-between px-6 z-30"
-    >
-      
-      {/* Breadcrumb / Status */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-200">{pageName}</span>
-      </div>
-
-      {/* Right Actions */}
-      <div className="flex items-center gap-5">
-        
-        {/* Dynamic Island / Music Pill */}
-        <AnimatePresence>
-          {music && <MusicIsland music={music} />}
-        </AnimatePresence>
-        
-        {/* Mini System Stats (Real Time with Hover Dropdown) */}
-        <SystemStatsIndicator sysStats={sysStats} />
-
-        <span className="text-sm font-mono text-gray-400 border-l border-[#222] pl-5">{time}</span>
-        
-        <button className="relative text-gray-400 hover:text-white transition-colors">
-          <Bell className="w-4 h-4" />
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#ff5500] rounded-full" />
-        </button>
-        
-        {/* User Profile Pill */}
-        <div className="flex items-center gap-2 bg-[#1a1a1a] pl-1 pr-3 py-1 rounded-full border border-[#222]">
-          <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-[#ff5500] to-purple-600" />
-          <span className="text-xs font-mono text-gray-300">AV</span>
+    <header className={`os-surface fixed left-3 right-3 top-3 z-40 flex h-14 items-center justify-between rounded-[22px] px-3 transition-[left] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] sm:right-4 sm:top-4 sm:px-4 ${isSidebarExpanded ? "md:left-[272px]" : "md:left-[96px]"}`}>
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${readyLoading ? "animate-pulse bg-white/25" : healthy ? "bg-white/60" : "bg-white/25"}`} />
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium tracking-[-0.01em] text-white/90">{pageName}</p>
+          {showStatusDetails && <p className="hidden font-mono text-[8px] uppercase tracking-[0.18em] text-white/25 sm:block">{healthy ? "Todos los sistemas nominales" : "Revisión requerida"}</p>}
         </div>
       </div>
 
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        {music?.albumArt && <MusicPill music={music} />}
+
+        <button
+          type="button"
+          onClick={voice.phase === "blocked" ? voice.listenNow : voice.toggleEnabled}
+          className={`flex h-9 items-center gap-2 rounded-xl border px-2.5 text-[10px] transition active:scale-[0.98] ${voiceActive ? "border-white/[0.1] bg-white/[0.055] text-white/70" : "border-white/[0.06] bg-white/[0.02] text-white/30 hover:text-white/60"}`}
+          aria-label={voiceActive ? "Pausar la escucha de Shadow" : "Activar la escucha de Shadow"}
+          title={voice.error ?? "Shadow escucha la palabra de activación mientras ValleOS está abierto"}
+        >
+          {voiceActive ? <Mic className={`h-3.5 w-3.5 ${voice.phase === "listening" ? "animate-pulse" : ""}`} /> : <MicOff className="h-3.5 w-3.5" />}
+          <span className="hidden xl:inline">{voiceLabel}</span>
+        </button>
+
+        <button type="button" onClick={openPalette} className="hidden h-9 items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 text-[11px] text-white/40 transition hover:bg-white/[0.05] hover:text-white/75 active:scale-[0.98] sm:flex" aria-label="Abrir paleta de comandos">
+          <Search className="h-3.5 w-3.5" />
+          <span>Comandos</span>
+          <kbd className="ml-1 font-mono text-[9px] text-white/20">⌘K</kbd>
+        </button>
+
+        <div className={`${showSystemMetrics ? "hidden lg:flex" : "hidden"} items-center gap-2 border-l border-white/[0.06] pl-3`}>
+          <span className="font-mono text-[9px] text-white/25">CPU</span>
+          <span className="font-mono text-[10px] text-white/65">{stats ? `${stats.cpu}%` : "—"}</span>
+          <span className="ml-1 font-mono text-[9px] text-white/25">RAM</span>
+          <span className="font-mono text-[10px] text-white/65">{stats?.ram ?? "—"}</span>
+        </div>
+
+        <span className="hidden min-w-11 border-l border-white/[0.06] pl-3 text-center font-mono text-[11px] text-white/45 sm:block">{time}</span>
+
+        <div className="relative">
+          <button type="button" onClick={() => setCenterOpen((open) => !open)} className={`relative flex h-9 w-9 items-center justify-center rounded-xl transition active:scale-95 ${centerOpen ? "bg-white/[0.08] text-white" : "text-white/40 hover:bg-white/[0.04] hover:text-white/80"}`} aria-label="Abrir centro del sistema" aria-expanded={centerOpen}>
+            <Bell className="h-4 w-4" />
+            {!healthy && !readyLoading && <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[color:var(--accent)]" />}
+          </button>
+          <AnimatePresence>{centerOpen && <SystemCenter ready={ready} stats={stats} onClose={() => setCenterOpen(false)} />}</AnimatePresence>
+        </div>
+
+        <Link href="/settings" className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.035] font-mono text-[10px] text-white/65 transition hover:border-white/[0.12] hover:text-white active:scale-95" aria-label="Abrir ajustes">AV</Link>
+      </div>
     </header>
   );
 }
 
+function MusicPill({ music }: { music: MusicState }) {
+  const { mutate } = useSWRConfig();
+  const control = async () => {
+    await fetch("/api/music/control", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "playpause" }) });
+    await mutate("/api/music");
+  };
+  return (
+    <button type="button" onClick={control} className="hidden h-9 max-w-44 items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.025] p-1 pr-3 transition hover:bg-white/[0.05] active:scale-[0.98] xl:flex" aria-label={music.playing ? "Pausar música" : "Reproducir música"}>
+      <img src={music.albumArt} alt="" className="h-7 w-7 rounded-lg object-cover" />
+      <span className="min-w-0 flex-1 truncate text-left text-[10px] text-white/55">{music.title ?? music.artist ?? "Música"}</span>
+      {music.playing ? <Pause className="h-3 w-3 text-white/65" /> : <Play className="h-3 w-3 text-white/65" />}
+    </button>
+  );
+}
+
+function SystemCenter({ ready, stats, onClose }: { ready?: ReadyState; stats?: SystemStats; onClose: () => void }) {
+  const checks = ready?.checks ? Object.entries(ready.checks) : [];
+  return (
+    <motion.div initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.98 }} transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }} className="os-surface absolute right-0 top-12 w-[min(330px,calc(100vw-24px))] rounded-2xl p-4 shadow-2xl">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium">Centro del sistema</p>
+          <p className="mt-1 text-[11px] text-white/35">Estado local y conexiones de ValleOS.</p>
+        </div>
+        <div className="rounded-full border border-white/[0.08] bg-white/[0.035] px-2 py-1 font-mono text-[8px] uppercase tracking-[0.14em] text-white/50">{ready?.status === "ready" ? "Nominal" : "Degradado"}</div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 divide-x divide-white/[0.06] rounded-xl border border-white/[0.06] bg-white/[0.02] py-3">
+        <Metric label="CPU" value={stats ? `${stats.cpu}%` : "—"} />
+        <Metric label="Memoria" value={stats?.ram ?? "—"} />
+      </div>
+      <div className="mt-4 divide-y divide-white/[0.055] border-y border-white/[0.055]">
+        {checks.length === 0 ? <p className="py-4 text-xs text-white/30">Comprobando servicios…</p> : checks.map(([name, ok]) => (
+          <div key={name} className="flex items-center gap-3 py-2.5">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.035] text-white/45">{ok ? <Check className="h-3 w-3" /> : <CircleAlert className="h-3 w-3" />}</span>
+            <span className="flex-1 text-[11px] capitalize text-white/55">{name.replace(/([A-Z])/g, " $1")}</span>
+            <span className="font-mono text-[8px] uppercase tracking-wider text-white/20">{ok ? "Conectado" : "Revisar"}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Link href="/shadow/autonomy" onClick={onClose} className="flex h-9 items-center justify-between rounded-xl bg-white/[0.035] px-3 text-[10px] text-white/50 transition hover:bg-white/[0.06] hover:text-white"><span className="flex items-center gap-2"><Server className="h-3.5 w-3.5" /> Autonomía</span><ChevronRight className="h-3 w-3" /></Link>
+        <Link href="/settings" onClick={onClose} className="flex h-9 items-center justify-between rounded-xl bg-white/[0.035] px-3 text-[10px] text-white/50 transition hover:bg-white/[0.06] hover:text-white"><span className="flex items-center gap-2"><Settings2 className="h-3.5 w-3.5" /> Ajustes</span><ChevronRight className="h-3 w-3" /></Link>
+      </div>
+    </motion.div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="px-3"><p className="font-mono text-[8px] uppercase tracking-widest text-white/25">{label}</p><p className="mt-1 text-lg font-medium tracking-[-0.04em] text-white/80">{value}</p></div>;
+}

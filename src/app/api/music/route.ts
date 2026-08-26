@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import util from 'util';
-import { getAverageColor } from 'fast-average-color-node';
+import { rejectNonLocalRequest } from '@/lib/local-request';
 
 const execPromise = util.promisify(exec);
 
@@ -10,7 +10,9 @@ const metadataCache = new Map<string, { albumArt: string | null, dominantColor: 
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const rejection = rejectNonLocalRequest(request);
+  if (rejection) return rejection;
   try {
     // 1. Check if Apple Music is running
     const { stdout: isRunning } = await execPromise(`osascript -e 'tell application "System Events" to (name of processes) contains "Music"'`);
@@ -45,7 +47,7 @@ export async function GET() {
     // 4. Fetch High-Res Album Art from iTunes API (Public)
     const cacheKey = `${trackName}-${artistName}-${albumName}`;
     let albumArt = null;
-    let dominantColor = '#fa243c'; // fallback apple music red
+    let dominantColor = '#777777';
     
     if (metadataCache.has(cacheKey)) {
       const cached = metadataCache.get(cacheKey)!;
@@ -69,12 +71,6 @@ export async function GET() {
           // Replace 100x100 resolution with 600x600 for crisp quality
           albumArt = data.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
           
-          try {
-            const color = await getAverageColor(albumArt);
-            dominantColor = color.hex;
-          } catch (colorError) {
-            console.log('Failed to parse dominant color');
-          }
         }
         metadataCache.set(cacheKey, { albumArt, dominantColor });
       } catch (e) {

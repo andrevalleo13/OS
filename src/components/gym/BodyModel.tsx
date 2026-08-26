@@ -1,7 +1,7 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Center, Environment } from "@react-three/drei";
+import { OrbitControls, Center } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { useRef, useState, useEffect, Suspense, useMemo } from "react";
 import * as THREE from "three";
@@ -11,90 +11,8 @@ import gsap from "gsap";
 // Realistic GLB Body Component
 // ─────────────────────────────────────────────
 
-function mapNodeToMuscleId(nodeName: string): string | null {
-  const name = nodeName.toLowerCase();
-  if (name.includes("pectoralis")) return "chest";
-  if (name.includes("rectus abdominis") || name.includes("oblique")) return "abs";
-  if (name.includes("deltoid")) return "shoulders";
-  if (name.includes("biceps brachii") || name.includes("brachialis")) return "biceps";
-  if (name.includes("triceps brachii")) return "triceps";
-  if (name.includes("brachioradialis") || name.includes("flexor carpi") || name.includes("extensor carpi") || name.includes("pronator") || name.includes("supinator")) return "forearms";
-  if (name.includes("rectus femoris") || name.includes("vastus") || name.includes("sartorius")) return "quads";
-  if (name.includes("biceps femoris") || name.includes("semitendinosus") || name.includes("semimembranosus")) return "hamstrings";
-  if (name.includes("gastrocnemius") || name.includes("soleus")) return "calves";
-  if (name.includes("latissimus dorsi")) return "lats";
-  if (name.includes("trapezius")) return "traps";
-  if (name.includes("iliocostalis") || name.includes("longissimus") || name.includes("spinalis") || name.includes("quadratus lumborum")) return "lower_back";
-  if (name.includes("gluteus")) return "glutes";
-  
-  if (name.includes("frontalis") || name.includes("oculi") || name.includes("oris") || name.includes("masseter") || name.includes("temporalis") || name.includes("pterygoid") || name.includes("zygomaticus") || name.includes("labii") || name.includes("anguli") || name.includes("risorius") || name.includes("mentalis") || name.includes("procerus") || name.includes("nasalis") || name.includes("corrugator") || name.includes("depressor") || name.includes("levator")) return "face";
-  return null;
-}
-
-function RealisticProceduralBody({ onSelect, selectedId, targetRotation, onHover, muscleSoreness = {} }: any) {
+function RealisticProceduralBody({ onSelect, selectedId, targetRotation, onHover }: any) {
   const groupRef = useRef<THREE.Group>(null);
-  const { scene } = useGLTF('/anatomy.glb');
-  
-  const materialsRef = useRef<Record<string, THREE.MeshPhysicalMaterial[]>>({});
-  
-  // Clone scene and setup materials ONCE
-  const clonedScene = useMemo(() => {
-    const s = scene.clone();
-    s.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        const muscleId = mapNodeToMuscleId(child.name);
-        
-        // Hide terrifying facial muscles for a sleek faceless look
-        if (muscleId === "face") {
-          child.visible = false;
-          return;
-        }
-        
-        const mat = new THREE.MeshPhysicalMaterial({
-          color: new THREE.Color("#000000"), // Pure deep black
-          emissive: new THREE.Color("#000000"),
-          emissiveIntensity: 0,
-          transparent: true,
-          opacity: 0.95,
-          roughness: 0.1, // Highly polished/glossy
-          metalness: 1.0, // Maximum metallic for obsidian look
-          clearcoat: 0.2, // Slight clearcoat for extra shine
-          side: THREE.DoubleSide
-        });
-        child.material = mat;
-
-        if (muscleId) {
-          child.userData = { muscleId };
-          if (!materialsRef.current[muscleId]) {
-            materialsRef.current[muscleId] = [];
-          }
-          materialsRef.current[muscleId].push(mat);
-        }
-      }
-    });
-    return s;
-  }, [scene]);
-
-  // Update properties efficiently without creating new materials
-  useEffect(() => {
-    Object.entries(materialsRef.current).forEach(([muscleId, mats]) => {
-      const isSelected = selectedId === muscleId;
-      const soreness = muscleSoreness[muscleId] || 0;
-      
-      const soreColor = new THREE.Color("#ff5533");
-      const healthyColor = new THREE.Color("#ffffff"); // Pure white for highlights
-      const finalEmissive = isSelected ? healthyColor : healthyColor.clone().lerp(soreColor, soreness / 100);
-      
-      const targetIntensity = isSelected ? 0.6 : (soreness > 0 ? 0.2 + (soreness / 100) * 0.4 : 0);
-      const targetOpacity = isSelected ? 1.0 : 0.7 + (soreness / 100) * 0.2;
-
-      mats.forEach(mat => {
-        mat.emissive.copy(finalEmissive);
-        mat.emissiveIntensity = targetIntensity;
-        mat.opacity = targetOpacity;
-      });
-    });
-  }, [selectedId, muscleSoreness]);
 
   useFrame(() => {
     if (groupRef.current) {
@@ -102,46 +20,42 @@ function RealisticProceduralBody({ onSelect, selectedId, targetRotation, onHover
     }
   });
 
-  const handlePointerOver = (e: any) => {
-    e.stopPropagation();
-    const id = e.object.userData.muscleId;
-    if (id) {
-      onHover(id);
-      document.body.style.cursor = "pointer";
-    }
-  };
-
-  const handlePointerOut = () => {
-    onHover(null);
-    document.body.style.cursor = "auto";
-  };
-
-  const handleClick = (e: any) => {
-    e.stopPropagation();
-    const id = e.object.userData.muscleId;
-    if (id) {
-      onSelect(id);
-    }
-  };
-
   return (
     <group ref={groupRef}>
       <Center>
-        <primitive 
-          object={clonedScene} 
-          scale={0.0014} // Perfect scale to fill the container nicely
-          rotation={[-Math.PI / 2, 0, 0]} // Stand the model upright
-          onPointerOver={handlePointerOver}
-          onPointerOut={handlePointerOut}
-          onClick={handleClick}
-        />
+        <mesh 
+          scale={[0.8, 2.0, 0.4]} 
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect("chest"); // Fallback mock selection
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            onHover("chest");
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            onHover(null);
+            document.body.style.cursor = "auto";
+          }}
+        >
+          <boxGeometry />
+          <meshPhysicalMaterial 
+            color="#000000" 
+            emissive="#ffffff" 
+            emissiveIntensity={selectedId ? 0.5 : 0.1}
+            transparent 
+            opacity={0.8} 
+            wireframe={true} 
+          />
+        </mesh>
       </Center>
     </group>
   );
 }
 
-// Preload the model
-useGLTF.preload('/anatomy.glb');
+// Preload the model (Commented out temporarily)
+// useGLTF.preload('/anatomy.glb');
 
 // ─────────────────────────────────────────────
 // Environment / Particles
@@ -153,9 +67,13 @@ function FloatingParticles() {
   const geometry = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 6;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 6;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 6;
+      const seeded = (offset: number) => {
+        const value = Math.sin((i * 3 + offset + 1) * 12.9898) * 43_758.5453;
+        return value - Math.floor(value);
+      };
+      pos[i * 3] = (seeded(0) - 0.5) * 6;
+      pos[i * 3 + 1] = (seeded(1) - 0.5) * 6;
+      pos[i * 3 + 2] = (seeded(2) - 0.5) * 6;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
@@ -243,7 +161,7 @@ function CameraController({ selectedMuscle, controlsRef }: any) {
 // Main Component
 // ─────────────────────────────────────────────
 
-export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscle, muscleSoreness = {} }: any) {
+export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscle }: any) {
   const [isFront, setIsFront] = useState(true);
   const controlsRef = useRef<any>(null);
 
@@ -277,7 +195,6 @@ export default function BodyModel({ onSelectMuscle, selectedMuscle, onHoverMuscl
             selectedId={selectedMuscle} 
             onHover={onHoverMuscle} 
             targetRotation={isFront ? 0 : Math.PI} 
-            muscleSoreness={muscleSoreness} 
           />
         </Suspense>
 

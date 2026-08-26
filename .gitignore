@@ -41,3 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# local runtime state (WhatsApp/Chromium sockets must stay outside Turbopack)
+/.wwebjs_auth/
+/.wwebjs_cache/
+/.valleos-runtime/

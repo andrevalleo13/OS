@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import util from 'util';
+import { z } from 'zod';
+import { rejectNonLocalRequest } from '@/lib/local-request';
 
 const execPromise = util.promisify(exec);
 
 export async function POST(req: Request) {
+  const rejection = rejectNonLocalRequest(req);
+  if (rejection) return rejection;
+
   try {
-    const { action } = await req.json();
+    const { action } = z.object({ action: z.enum(['playpause', 'next', 'previous']) }).parse(await req.json());
 
     if (action === 'playpause') {
       await execPromise(`osascript -e 'tell application "Music" to playpause'`);

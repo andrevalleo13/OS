@@ -29,7 +29,7 @@ interface ExerciseLog {
 }
 
 export default function ActiveSession({ routine, liftHistory, onFinish }: ActiveSessionProps) {
-  const [startTime] = useState(Date.now());
+  const [startTime] = useState(() => Date.now());
   const [isSaving, setIsSaving] = useState(false);
   const [victoryData, setVictoryData] = useState<{ volume: number, prs: number, duration: number } | null>(null);
   const [restTimer, setRestTimer] = useState<number | null>(null);
@@ -154,7 +154,7 @@ export default function ActiveSession({ routine, liftHistory, onFinish }: Active
       const validSets = log.sets.filter(s => parseFloat(s.weight) > 0 && parseInt(s.reps) > 0);
       
       let maxWeight = 0;
-      let repsArr: number[] = [];
+      const repsArr: number[] = [];
       
       validSets.forEach(s => {
         let w = parseFloat(s.weight);
@@ -307,7 +307,7 @@ export default function ActiveSession({ routine, liftHistory, onFinish }: Active
               
               <div className="flex flex-col gap-2">
                 <AnimatePresence mode="popLayout">
-                  {log.sets.map((set, setIndex) => (
+                  {log.sets.map((set) => (
                     <motion.div 
                       key={set.id}
                       layout
@@ -358,7 +358,7 @@ export default function ActiveSession({ routine, liftHistory, onFinish }: Active
                       <div className="col-span-1 flex items-center justify-center">
                         <button 
                           onClick={() => handleRemoveSet(log.id, set.id)}
-                          className="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-600 opacity-0 transition-colors hover:bg-white/[0.055] hover:text-white/70 group-hover:opacity-100"
                           disabled={set.isDone}
                         >
                           <X className="w-4 h-4" />

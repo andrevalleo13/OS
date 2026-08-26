@@ -1,42 +1,42 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { startOfWeek } from "date-fns";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
+import { calculateFinanceSummary } from "@/features/finance/finance.service";
+
+const transactionSchema = z.object({
+  amount: z.number().finite().refine((value) => value !== 0, "El monto no puede ser cero."),
+  category: z.string().trim().min(1).max(100).default("Quick Expense"),
+  note: z.string().trim().max(500).optional(),
+  date: z.date().optional(),
+});
+
+export type AddTransactionInput = z.input<typeof transactionSchema>;
 
 export async function getTransactions() {
-  try {
-    const txs = await prisma.transaction.findMany({
-      orderBy: { date: 'desc' },
-      take: 10,
-    });
-    
-    // Calculate simple balance (Mocking a starting balance + incomes - expenses)
-    // Real app would sum everything.
-    const startBalance = 4200;
-    const spentThisWeek = txs.filter((t: any) => t.type === 'EXPENSE').reduce((acc: number, t: any) => acc + t.amount, 0);
-    const balance = startBalance - spentThisWeek;
-    
-    return { transactions: txs, balance, spentThisWeek };
-  } catch (error) {
-    console.error("Failed to fetch transactions:", error);
-    return { transactions: [], balance: 4200, spentThisWeek: 0 };
-  }
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const [recentTransactions, weeklyTransactions] = await Promise.all([
+    prisma.transaction.findMany({ orderBy: { date: "desc" }, take: 10 }),
+    prisma.transaction.findMany({ where: { date: { gte: weekStart } } }),
+  ]);
+  return { transactions: recentTransactions, ...calculateFinanceSummary(weeklyTransactions) };
 }
 
-export async function addTransaction(amount: number, category: string = "Quick Expense") {
-  try {
-    const tx = await prisma.transaction.create({
-      data: {
-        amount,
-        type: amount > 0 ? "INCOME" : "EXPENSE",
-        category,
-        note: "Added via Shadow Quick Input",
-      },
-    });
-    revalidatePath("/");
-    return tx;
-  } catch (error) {
-    console.error("Failed to add transaction:", error);
-    throw new Error("Failed to add transaction");
-  }
+export async function addTransaction(input: AddTransactionInput) {
+  const parsed = transactionSchema.parse(input);
+  const amount = parsed.amount;
+  const transaction = await prisma.transaction.create({
+    data: {
+      amount,
+      type: amount > 0 ? "INCOME" : "EXPENSE",
+      category: parsed.category,
+      note: parsed.note ?? "Added via ValleOS",
+      date: parsed.date,
+    },
+  });
+  revalidatePath("/");
+  revalidatePath("/finances");
+  return transaction;
 }

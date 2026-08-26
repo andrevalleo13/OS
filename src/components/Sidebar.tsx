@@ -1,154 +1,121 @@
 "use client";
 
-import { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ScanFace, Box, BarChart2, Settings, Search, ChevronRight, Wand2, Dumbbell, Utensils, GraduationCap } from "lucide-react";
-import ShadowOrb from "./ShadowOrb";
-import gsap from "gsap";
-import { useGSAP } from "@gsap/react";
+import {
+  Activity,
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  ChevronRight,
+  CircleDot,
+  Dumbbell,
+  GraduationCap,
+  Home,
+  Search,
+  Settings,
+  Utensils,
+} from "lucide-react";
 import { useUIStore } from "@/store/useUIStore";
 
-gsap.registerPlugin(useGSAP);
+const primaryItems = [
+  { icon: Home, label: "Inicio", href: "/" },
+  { icon: CalendarDays, label: "Calendario", href: "/calendar" },
+  { icon: CircleDot, label: "Shadow", href: "/shadow" },
+];
+
+const lifeItems = [
+  { icon: Activity, label: "Biometría", href: "/biometrics" },
+  { icon: BookOpen, label: "Obsidian", href: "/obsidian" },
+  { icon: Dumbbell, label: "Gimnasio", href: "/gym" },
+  { icon: Utensils, label: "Nutrición", href: "/food" },
+  { icon: GraduationCap, label: "Universidad", href: "/uni" },
+  { icon: BarChart3, label: "Finanzas", href: "/finances" },
+];
+
+const mobileItems = [primaryItems[0], primaryItems[1], primaryItems[2], lifeItems[2], lifeItems[3]];
+
+function isCurrent(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export default function Sidebar() {
+  const pathname = usePathname();
   const isExpanded = useUIStore((state) => state.isSidebarExpanded);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-  const pathname = usePathname();
-  const sidebarRef = useRef<HTMLElement>(null);
-  const textRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const buttonRef = useRef<HTMLDivElement>(null);
-
-  const items = [
-    { icon: Home, label: "Inicio", href: "/" },
-    { icon: Wand2, label: "Shadow", href: "/shadow" },
-    { icon: ScanFace, label: "Biometría", href: "/biometrics" },
-    { icon: Box, label: "Obsidian", href: "/obsidian" },
-    { icon: Dumbbell, label: "Gimnasio", href: "/gym" },
-    { icon: Utensils, label: "Nutrición", href: "/food" },
-    { icon: GraduationCap, label: "Universidad", href: "/uni" },
-    { icon: BarChart2, label: "Finanzas", href: "/finances" },
-  ];
-
-  useGSAP(() => {
-    // 1. Sidebar Width Animation (Super smooth spring-like feel using Power4)
-    gsap.to(sidebarRef.current, {
-      width: isExpanded ? 240 : 64,
-      duration: 0.45,
-      ease: "power3.inOut",
-    });
-
-    // 2. Chevron Rotation
-    gsap.to(buttonRef.current, {
-      rotate: isExpanded ? 180 : 0,
-      duration: 0.5,
-      ease: "back.out(1.5)",
-    });
-
-    // 3. Text Stagger Animation
-    if (isExpanded) {
-      // Show text
-      gsap.to(textRefs.current, {
-        opacity: 1,
-        x: 0,
-        display: "block",
-        duration: 0.4,
-        delay: 0.2, // wait for width to expand slightly
-        stagger: 0.03,
-        ease: "power2.out",
-      });
-    } else {
-      // Hide text immediately
-      gsap.to(textRefs.current, {
-        opacity: 0,
-        x: -10,
-        duration: 0.2,
-        ease: "power2.in",
-        onComplete: () => {
-          gsap.set(textRefs.current, { display: "none" });
-        }
-      });
-    }
-  }, [isExpanded]);
+  const openPalette = () => document.dispatchEvent(new CustomEvent("valleos:command-palette"));
 
   return (
-    <nav 
-      ref={sidebarRef}
-      className="fixed left-4 top-4 bottom-4 w-[64px] bg-[#0a0a0a]/90 backdrop-blur-2xl border border-[#1a1a1a] shadow-2xl shadow-black/50 rounded-[32px] flex flex-col py-6 z-50 group"
-    >
-      
-      {/* Expand/Collapse Toggle (Centered vertically to avoid overlapping menu items) */}
-      <button 
-        onClick={toggleSidebar}
-        className="absolute right-[-12px] top-1/2 -translate-y-1/2 w-6 h-6 bg-[#1a1a1a] border border-[#222] rounded-full flex items-center justify-center text-gray-500 hover:text-white transition-colors opacity-0 group-hover:opacity-100 z-50 shadow-lg"
+    <>
+      <aside
+        className={`group/sidebar os-surface fixed bottom-4 left-4 top-4 z-50 hidden overflow-visible rounded-[28px] transition-[width] duration-500 [transition-timing-function:cubic-bezier(0.16,1,0.3,1)] md:flex md:flex-col ${isExpanded ? "w-[240px]" : "w-[64px]"}`}
+        aria-label="Navegación principal"
       >
-        <div ref={buttonRef}>
-          <ChevronRight className="w-3.5 h-3.5" />
-        </div>
-      </button>
-
-      <div className="px-3 mb-6">
-        <button 
-          onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', metaKey: true }))}
-          className={`w-full h-8 rounded-full flex items-center ${isExpanded ? 'px-3 bg-transparent hover:bg-[#1a1a1a]' : 'justify-center bg-transparent hover:bg-[#1a1a1a]'} text-gray-500 hover:text-gray-300 transition-colors border border-transparent`}
+        <button
+          type="button"
+          onClick={openPalette}
+          className={`mx-2 mt-2 flex h-10 shrink-0 items-center rounded-xl border border-transparent text-white/40 transition hover:border-white/[0.06] hover:bg-white/[0.035] hover:text-white/80 active:scale-[0.98] ${isExpanded ? "px-3" : "justify-center"}`}
+          aria-label="Abrir comandos"
         >
-          <Search className="w-3.5 h-3.5 shrink-0" />
-          <div 
-            ref={(el) => { if (el) textRefs.current[0] = el; }} 
-            className="ml-3 flex-1 hidden opacity-0"
-          >
-            <div className="flex items-center w-full">
-              <span className="text-xs font-normal text-gray-500">Buscar</span>
-              <div className="ml-auto flex items-center gap-1 opacity-50">
-                <kbd className="text-[9px] bg-[#1a1a1a] border border-[#222] text-gray-500 px-1 py-0.5 rounded-[4px] font-mono">⌘</kbd>
-                <kbd className="text-[9px] bg-[#1a1a1a] border border-[#222] text-gray-500 px-1 py-0.5 rounded-[4px] font-mono">G</kbd>
-              </div>
-            </div>
-          </div>
+          <Search className="h-4 w-4 shrink-0" />
+          <span className={`ml-3 whitespace-nowrap text-xs transition-opacity ${isExpanded ? "opacity-100" : "hidden opacity-0"}`}>Comandos</span>
+          {isExpanded && <kbd className="ml-auto font-mono text-[9px] text-white/25">⌘K</kbd>}
         </button>
-      </div>
 
-      {/* Nav Items */}
-      <div className="flex flex-col gap-2 flex-1 px-3">
-        {items.map((item, i) => {
-          const isActive = pathname === item.href;
+        <div className={`${isExpanded ? "mt-3" : "mt-0"} flex-1 overflow-y-auto px-2 pb-2`}>
+          <NavGroup label="Sistema" items={primaryItems} pathname={pathname} expanded={isExpanded} />
+          <NavGroup label="Vida" items={lifeItems} pathname={pathname} expanded={isExpanded} />
+        </div>
+
+        <div className="border-t border-white/[0.055] p-2">
+          <NavLink item={{ icon: Settings, label: "Ajustes", href: "/settings" }} pathname={pathname} expanded={isExpanded} />
+        </div>
+
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="pointer-events-none absolute -right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[#171717] text-white/35 opacity-0 shadow-xl transition-[opacity,color,border-color,transform] duration-200 hover:border-white/20 hover:text-white active:scale-95 group-hover/sidebar:pointer-events-auto group-hover/sidebar:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+          aria-label={isExpanded ? "Contraer navegación" : "Expandir navegación"}
+        >
+          <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-500 ${isExpanded ? "rotate-180" : ""}`} />
+        </button>
+      </aside>
+
+      <nav className="os-surface fixed inset-x-3 bottom-3 z-50 grid h-16 grid-cols-5 rounded-[22px] px-1 md:hidden" aria-label="Navegación móvil">
+        {mobileItems.map((item) => {
+          const active = isCurrent(pathname, item.href);
+          const Icon = item.icon;
           return (
-            <Link 
-              key={i}
-              href={item.href}
-              className={`w-full h-10 rounded-full flex items-center ${isExpanded ? 'px-3' : 'justify-center'} transition-all duration-200 relative group/item
-                ${isActive ? 'bg-[#1a1a1a] text-white' : 'text-gray-500 hover:bg-[#1a1a1a] hover:text-gray-200'}
-              `}
-              title={!isExpanded ? item.label : undefined}
-            >
-              <item.icon className="w-5 h-5 min-w-[20px] shrink-0" />
-              <span 
-                ref={(el) => { if (el) textRefs.current[i + 1] = el; }}
-                className="ml-3 text-sm font-medium whitespace-nowrap hidden opacity-0"
-              >
-                {item.label}
-              </span>
+            <Link key={item.href} href={item.href} className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-[18px] text-[9px] transition active:scale-[0.96] ${active ? "text-[color:var(--accent)]" : "text-white/35"}`} aria-current={active ? "page" : undefined}>
+              <Icon className="h-[18px] w-[18px]" />
+              <span className="truncate">{item.label}</span>
+              {active && <span className="absolute bottom-1 h-0.5 w-3 rounded-full bg-[color:var(--accent)]" />}
             </Link>
           );
         })}
-      </div>
+      </nav>
+    </>
+  );
+}
 
-      {/* Footer Settings & Shadow */}
-      <div className="px-3 mt-auto flex flex-col gap-4">
-        
-        {/* Settings */}
-        <button className={`w-full h-10 rounded-full flex items-center ${isExpanded ? 'px-3' : 'justify-center'} text-gray-500 hover:bg-[#1a1a1a] hover:text-white transition-colors`}>
-          <Settings className="w-4 h-4 min-w-[16px] shrink-0" />
-          <span 
-            ref={(el) => { if (el) textRefs.current[items.length + 1] = el; }}
-            className="ml-3 text-sm font-medium whitespace-nowrap hidden opacity-0"
-          >
-            Ajustes
-          </span>
-        </button>
+function NavGroup({ label, items, pathname, expanded }: { label: string; items: typeof primaryItems; pathname: string; expanded: boolean }) {
+  return (
+    <div className={expanded ? "mb-4" : "mb-0"}>
+      {expanded && <p className="h-6 px-3 font-mono text-[8px] uppercase tracking-[0.2em] text-white/20">{label}</p>}
+      <div className={expanded ? "space-y-0.5" : "space-y-0"}>{items.map((item) => <NavLink key={item.href} item={item} pathname={pathname} expanded={expanded} />)}</div>
+    </div>
+  );
+}
 
-      </div>
-
-    </nav>
+function NavLink({ item, pathname, expanded }: { item: (typeof primaryItems)[number]; pathname: string; expanded: boolean }) {
+  const active = isCurrent(pathname, item.href);
+  const Icon = item.icon;
+  return (
+    <Link href={item.href} title={expanded ? undefined : item.label} aria-current={active ? "page" : undefined} className={`relative flex h-10 items-center rounded-xl transition active:scale-[0.98] ${expanded ? "px-3" : "justify-center"} ${active ? "bg-white/[0.065] text-white" : "text-white/35 hover:bg-white/[0.035] hover:text-white/75"}`}>
+      {active && <span className="absolute left-0 h-4 w-0.5 rounded-full bg-[color:var(--accent)]" />}
+      <Icon className={`h-4 w-4 shrink-0 ${active ? "text-[color:var(--accent)]" : ""}`} />
+      <span className={`ml-3 whitespace-nowrap text-[12px] transition-opacity ${expanded ? "opacity-100" : "hidden opacity-0"}`}>{item.label}</span>
+    </Link>
   );
 }

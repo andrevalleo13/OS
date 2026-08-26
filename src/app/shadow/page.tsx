@@ -1,110 +1,421 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import ShadowOrb from "@/components/ShadowOrb";
-import { ArrowUp } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { askShadow } from "@/app/actions/shadow";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { askShadow, getShadowConversation, importShadowConversation } from "@/app/actions/shadow";
+import { approveShadowAction } from "@/app/actions/shadow-actions";
+import { ShadowComposer } from "@/components/shadow/ShadowComposer";
+import { ShadowContextRail } from "@/components/shadow/ShadowContextRail";
+import { ShadowConversationRail } from "@/components/shadow/ShadowConversationRail";
+import { ShadowWorkspace } from "@/components/shadow/ShadowWorkspace";
+import {
+  SHADOW_ACTIVE_CONVERSATION_KEY,
+  SHADOW_VOICE_ASSISTANT_EVENT,
+  SHADOW_VOICE_USER_EVENT,
+  useShadowVoice,
+  type ShadowVoiceMessageDetail,
+} from "@/components/shadow/ShadowVoiceProvider";
+import type { ComposerMode, ShadowConversationMeta, ShadowMessage, ShadowStatus } from "@/components/shadow/types";
+import type { PendingShadowAction } from "@/features/shadow/file-actions";
+import { uiAudio } from "@/utils/audio";
+
+const PRIMARY_KEY = "dashboard:primary";
+const CONVERSATION_INDEX_KEY = "valleos.shadow.conversations.v2";
+const MESSAGE_CACHE_KEY = "valleos.shadow.message-cache.v2";
+const DRAFTS_KEY = "valleos.shadow.drafts.v1";
+const LEGACY_HISTORY_KEY = "valleos.shadow.history.v1";
+
+type MessageMap = Record<string, ShadowMessage[]>;
+type StatusMap = Record<string, ShadowStatus>;
+type DraftMap = Record<string, string>;
+
+function makeId(prefix: string) {
+  return `${prefix}-${typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function parseStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as T : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeMessage(value: unknown, index: number): ShadowMessage | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<ShadowMessage>;
+  if ((candidate.sender !== "USR" && candidate.sender !== "SHDW") || typeof candidate.text !== "string") return null;
+  return {
+    ...candidate,
+    id: typeof candidate.id === "string" ? candidate.id : `imported-${index}-${candidate.createdAt ?? candidate.text.slice(0, 20)}`,
+    sender: candidate.sender,
+    text: candidate.text,
+  };
+}
+
+function titleFromMessage(message: string) {
+  const clean = message.replace(/[#*_`>\n]/g, " ").replace(/\s+/g, " ").trim();
+  if (!clean) return "Nueva conversación";
+  return clean.length > 46 ? `${clean.slice(0, 43)}…` : clean;
+}
+
+function newConversationMeta(key: string, now = new Date().toISOString()): ShadowConversationMeta {
+  return {
+    key,
+    title: "Nueva conversación",
+    preview: "Contexto limpio, memoria global activa",
+    createdAt: now,
+    updatedAt: now,
+    pinned: false,
+    archived: false,
+  };
+}
+
+function upsertConversation(list: ShadowConversationMeta[], conversation: ShadowConversationMeta) {
+  const exists = list.some((item) => item.key === conversation.key);
+  return exists ? list.map((item) => item.key === conversation.key ? conversation : item) : [conversation, ...list];
+}
+
+function pushConversationUrl(key: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("c", key);
+  url.searchParams.delete("q");
+  window.history.pushState({ shadowConversation: key }, "", `${url.pathname}${url.search}`);
+}
 
 export default function ShadowPage() {
-  const [status, setStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
-  const [inputValue, setInputValue] = useState('');
-  const [logs, setLogs] = useState<string[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const voice = useShadowVoice();
+  const [conversations, setConversations] = useState<ShadowConversationMeta[]>([]);
+  const [activeKey, setActiveKey] = useState(PRIMARY_KEY);
+  const [messagesByConversation, setMessagesByConversation] = useState<MessageMap>({});
+  const [statusByConversation, setStatusByConversation] = useState<StatusMap>({});
+  const [drafts, setDrafts] = useState<DraftMap>({});
+  const [composerMode, setComposerMode] = useState<ComposerMode>("ask");
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [loadErrors, setLoadErrors] = useState<Record<string, string | null>>({});
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [motionPaused, setMotionPaused] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
-  // Auto-scroll logs
+  const loadedKeys = useRef(new Set<string>());
+  const pendingQuery = useRef<string | null>(null);
+  const timersRef = useRef(new Set<number>());
+
+  const logs = messagesByConversation[activeKey] ?? [];
+  const status = statusByConversation[activeKey] ?? "idle";
+  const draft = drafts[activeKey] ?? "";
+  const activeConversation = conversations.find((conversation) => conversation.key === activeKey) ?? newConversationMeta(activeKey);
+  const pendingActions = logs.filter((message) => message.pendingAction).length;
+
+  const updateConversation = useCallback((key: string, update: Partial<ShadowConversationMeta>) => {
+    setConversations((current) => current.map((conversation) => conversation.key === key ? { ...conversation, ...update } : conversation));
+  }, []);
+
+  const appendMessage = useCallback((key: string, message: ShadowMessage) => {
+    setMessagesByConversation((current) => ({
+      ...current,
+      [key]: [...(current[key] ?? []), message],
+    }));
+  }, []);
+
+  const setConversationStatus = useCallback((key: string, nextStatus: ShadowStatus) => {
+    setStatusByConversation((current) => ({ ...current, [key]: nextStatus }));
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
+    const now = new Date().toISOString();
+    const storedIndex = parseStored<ShadowConversationMeta[]>(CONVERSATION_INDEX_KEY, []);
+    const storedCacheRaw = parseStored<Record<string, unknown[]>>(MESSAGE_CACHE_KEY, {});
+    const legacyRaw = parseStored<unknown[]>(LEGACY_HISTORY_KEY, []);
+    const oldLegacyRaw = parseStored<unknown[]>("shadow_logs", []);
+    const legacy = (legacyRaw.length ? legacyRaw : oldLegacyRaw).map(normalizeMessage).filter((message): message is ShadowMessage => Boolean(message));
+    const cache = Object.fromEntries(Object.entries(storedCacheRaw).map(([key, values]) => [key, values.map(normalizeMessage).filter((message): message is ShadowMessage => Boolean(message))]));
+    if (!cache[PRIMARY_KEY]?.length && legacy.length) cache[PRIMARY_KEY] = legacy;
 
-  const processCommand = async (command: string) => {
-    if (!command.trim() || status === 'thinking') return;
-    
-    setInputValue('');
-    setStatus('thinking');
-    setLogs(prev => [...prev, `[USR] ${command}`]);
+    const requested = new URLSearchParams(window.location.search).get("c")?.trim() || PRIMARY_KEY;
+    pendingQuery.current = new URLSearchParams(window.location.search).get("q")?.trim() || null;
+
+    let index = storedIndex.filter((conversation) => conversation && typeof conversation.key === "string");
+    if (!index.some((conversation) => conversation.key === PRIMARY_KEY)) {
+      const firstUserMessage = cache[PRIMARY_KEY]?.find((message) => message.sender === "USR")?.text;
+      index.push({ ...newConversationMeta(PRIMARY_KEY, now), title: firstUserMessage ? titleFromMessage(firstUserMessage) : "Conversación principal", preview: cache[PRIMARY_KEY]?.at(-1)?.text ?? "Contexto principal de Shadow" });
+    }
+    if (!index.some((conversation) => conversation.key === requested)) index = upsertConversation(index, newConversationMeta(requested, now));
+
+    setConversations(index);
+    setMessagesByConversation(cache);
+    setDrafts(parseStored<DraftMap>(DRAFTS_KEY, {}));
+    setActiveKey(requested);
+    setHydrated(true);
+    window.localStorage.removeItem("shadow_logs");
+  }, []);
+
+  const loadConversation = useCallback(async (key: string, force = false) => {
+    if (!hydrated || (!force && loadedKeys.current.has(key))) return;
+    setLoadingKey(key);
+    setLoadErrors((current) => ({ ...current, [key]: null }));
+    const cached = messagesByConversation[key] ?? [];
+
+    const result = await getShadowConversation(key);
+    if (result.success) {
+      const serverMessages = result.messages.map((message, index) => normalizeMessage(message, index)).filter((message): message is ShadowMessage => Boolean(message));
+      if (serverMessages.length > 0 || cached.length === 0) {
+        setMessagesByConversation((current) => ({ ...current, [key]: serverMessages }));
+      } else if (cached.length > 0) {
+        await importShadowConversation({
+          conversationKey: key,
+          channel: "dashboard",
+          messages: cached.map(({ sender, text, mood, widget }) => ({ role: sender === "USR" ? "user" : "assistant", content: text, mood, widget })),
+        });
+      }
+      loadedKeys.current.add(key);
+    } else if (cached.length === 0) {
+      setLoadErrors((current) => ({ ...current, [key]: "El historial no respondió. Tu conversación no fue modificada." }));
+    }
+    setLoadingKey((current) => current === key ? null : current);
+  }, [hydrated, messagesByConversation]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    void loadConversation(activeKey);
+    window.localStorage.setItem(SHADOW_ACTIVE_CONVERSATION_KEY, activeKey);
+    const url = new URL(window.location.href);
+    url.searchParams.set("c", activeKey);
+    url.searchParams.delete("q");
+    window.history.replaceState({ shadowConversation: activeKey }, "", `${url.pathname}${url.search}`);
+  }, [activeKey, hydrated, loadConversation]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    window.localStorage.setItem(CONVERSATION_INDEX_KEY, JSON.stringify(conversations));
+  }, [conversations, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const serializable = Object.fromEntries(Object.entries(messagesByConversation).map(([key, messages]) => [key, messages.slice(-80).map(({ id, sender, text, mood, widget, createdAt }) => ({ id, sender, text, mood, widget, createdAt }))]));
+    window.localStorage.setItem(MESSAGE_CACHE_KEY, JSON.stringify(serializable));
+  }, [messagesByConversation, hydrated]);
+
+  useEffect(() => {
+    if (hydrated) window.localStorage.setItem(DRAFTS_KEY, JSON.stringify(drafts));
+  }, [drafts, hydrated]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const key = new URLSearchParams(window.location.search).get("c")?.trim();
+      if (key) {
+        setConversations((current) => current.some((conversation) => conversation.key === key) ? current : upsertConversation(current, newConversationMeta(key)));
+        setActiveKey(key);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => () => {
+    timersRef.current.forEach((timer) => window.clearTimeout(timer));
+  }, []);
+
+  useEffect(() => {
+    const handleUserMessage = (event: Event) => {
+      const { conversationKey, message } = (event as CustomEvent<ShadowVoiceMessageDetail>).detail;
+      appendMessage(conversationKey, message);
+      setConversationStatus(conversationKey, "thinking");
+      setConversations((current) => {
+        const existing = current.find((conversation) => conversation.key === conversationKey);
+        const base = existing ?? newConversationMeta(conversationKey, message.createdAt);
+        const next = {
+          ...base,
+          title: base.title === "Nueva conversación" ? titleFromMessage(message.text) : base.title,
+          preview: message.text,
+          updatedAt: message.createdAt ?? new Date().toISOString(),
+          archived: false,
+        };
+        return upsertConversation(current, next);
+      });
+    };
+    const handleAssistantMessage = (event: Event) => {
+      const { conversationKey, message } = (event as CustomEvent<ShadowVoiceMessageDetail>).detail;
+      appendMessage(conversationKey, message);
+      setConversationStatus(conversationKey, "speaking");
+      updateConversation(conversationKey, { preview: message.text, updatedAt: message.createdAt ?? new Date().toISOString() });
+      const timer = window.setTimeout(() => {
+        setConversationStatus(conversationKey, "idle");
+        timersRef.current.delete(timer);
+      }, Math.min(3_800, Math.max(1_200, message.text.split(/\s+/).length * 70)));
+      timersRef.current.add(timer);
+    };
+    window.addEventListener(SHADOW_VOICE_USER_EVENT, handleUserMessage);
+    window.addEventListener(SHADOW_VOICE_ASSISTANT_EVENT, handleAssistantMessage);
+    return () => {
+      window.removeEventListener(SHADOW_VOICE_USER_EVENT, handleUserMessage);
+      window.removeEventListener(SHADOW_VOICE_ASSISTANT_EVENT, handleAssistantMessage);
+    };
+  }, [appendMessage, setConversationStatus, updateConversation]);
+
+  const processCommand = useCallback(async (rawCommand: string) => {
+    const command = rawCommand.trim();
+    const conversationKey = activeKey;
+    if (!command || (statusByConversation[conversationKey] ?? "idle") === "thinking") return;
+
+    const now = new Date().toISOString();
+    const userMessage: ShadowMessage = { id: makeId("usr"), sender: "USR", text: command, createdAt: now };
+    appendMessage(conversationKey, userMessage);
+    setDrafts((current) => ({ ...current, [conversationKey]: "" }));
+    setConversationStatus(conversationKey, "thinking");
+    setComposerMode("ask");
+    updateConversation(conversationKey, {
+      title: activeConversation.title === "Nueva conversación" ? titleFromMessage(command) : activeConversation.title,
+      preview: command,
+      updatedAt: now,
+      archived: false,
+    });
+    uiAudio.playSend();
 
     try {
-      const result = await askShadow(command);
-      setStatus('speaking');
-      setLogs(prev => [...prev, `[SHDW] ${result.text}`]);
-      
-      const wordCount = result.text.split(' ').length;
-      const speakingDuration = Math.max(2000, wordCount * 250);
-
-      setTimeout(() => {
-        setStatus('idle');
-      }, speakingDuration);
-    } catch (e) {
-      setStatus('idle');
+      const result = await askShadow({ message: command, conversationKey, channel: "dashboard" });
+      const response: ShadowMessage = {
+        id: makeId("shdw"),
+        sender: "SHDW",
+        text: result.text,
+        mood: result.mood,
+        widget: result.widget,
+        pendingAction: result.pendingAction,
+        createdAt: new Date().toISOString(),
+      };
+      appendMessage(conversationKey, response);
+      setConversationStatus(conversationKey, "speaking");
+      updateConversation(conversationKey, { preview: result.text, updatedAt: response.createdAt! });
+      uiAudio.playReceive();
+      if (result.widget && result.widget !== "none") {
+        const widgetTimer = window.setTimeout(() => uiAudio.playWidgetSpawn(), 420);
+        timersRef.current.add(widgetTimer);
+      }
+      const idleTimer = window.setTimeout(() => {
+        setConversationStatus(conversationKey, "idle");
+        timersRef.current.delete(idleTimer);
+      }, Math.min(2600, Math.max(900, result.text.split(/\s+/).length * 55)));
+      timersRef.current.add(idleTimer);
+    } catch {
+      appendMessage(conversationKey, { id: makeId("error"), sender: "SHDW", text: "No pude completar la solicitud. El mensaje permanece en este hilo para que puedas reintentarlo.", mood: "urgent", createdAt: new Date().toISOString() });
+      setConversationStatus(conversationKey, "idle");
     }
-  };
+  }, [activeConversation.title, activeKey, appendMessage, setConversationStatus, statusByConversation, updateConversation]);
 
-  const handleCommandSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    processCommand(inputValue);
-  };
+  useEffect(() => {
+    if (!hydrated || !pendingQuery.current) return;
+    const query = pendingQuery.current;
+    pendingQuery.current = null;
+    void processCommand(query);
+  }, [hydrated, processCommand]);
+
+  const createConversation = useCallback(() => {
+    const key = `dashboard:${makeId("conversation")}`;
+    const meta = newConversationMeta(key);
+    setConversations((current) => upsertConversation(current, meta));
+    setMessagesByConversation((current) => ({ ...current, [key]: [] }));
+    loadedKeys.current.add(key);
+    pushConversationUrl(key);
+    setActiveKey(key);
+    setHistoryOpen(false);
+    setComposerMode("ask");
+  }, []);
+
+  const selectConversation = useCallback((key: string) => {
+    if (key !== activeKey) pushConversationUrl(key);
+    setActiveKey(key);
+    setHistoryOpen(false);
+    setContextOpen(false);
+  }, [activeKey]);
+
+  const toggleArchive = useCallback((key: string) => {
+    const target = conversations.find((conversation) => conversation.key === key);
+    if (!target) return;
+    const next = conversations.map((conversation) => conversation.key === key ? { ...conversation, archived: !conversation.archived, pinned: conversation.archived ? conversation.pinned : false } : conversation);
+    setConversations(next);
+    if (key === activeKey && !target.archived) {
+      const replacement = next.find((conversation) => !conversation.archived && conversation.key !== key);
+      if (replacement) {
+        pushConversationUrl(replacement.key);
+        setActiveKey(replacement.key);
+      }
+      else createConversation();
+    }
+  }, [activeKey, conversations, createConversation]);
+
+  const handleActionDecision = useCallback(async (messageId: string, action: PendingShadowAction, approved: boolean) => {
+    const conversationKey = activeKey;
+    setMessagesByConversation((current) => ({
+      ...current,
+      [conversationKey]: (current[conversationKey] ?? []).map((message) => message.id === messageId ? { ...message, pendingAction: undefined } : message),
+    }));
+    if (!approved) {
+      appendMessage(conversationKey, { id: makeId("cancelled"), sender: "SHDW", text: "Acción cancelada. No cambié nada.", mood: "neutral", createdAt: new Date().toISOString() });
+      return;
+    }
+    setConversationStatus(conversationKey, "thinking");
+    const result = await approveShadowAction(action.id);
+    appendMessage(conversationKey, { id: makeId("action"), sender: "SHDW", text: result.message, mood: result.success ? "success" : "urgent", createdAt: new Date().toISOString() });
+    setConversationStatus(conversationKey, "idle");
+  }, [activeKey, appendMessage, setConversationStatus]);
+
+  const sortedConversations = useMemo(() => [...conversations].sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()), [conversations]);
+
+  if (!hydrated) {
+    return <div className="h-[calc(100dvh-11rem)] animate-pulse rounded-[28px] border border-white/[0.055] bg-white/[0.018] md:h-[calc(100dvh-7.25rem)]" aria-label="Cargando Shadow" />;
+  }
 
   return (
-    <div className="w-full flex-1 relative bg-[#000] rounded-[32px] border border-white/[0.02] text-[#ededed] overflow-hidden flex flex-col items-center justify-center font-sans selection:bg-white/20 mt-4 shadow-2xl pb-24">
-      
-      {/* Background Ambient Glow matching state */}
-      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full blur-[150px] pointer-events-none transition-all duration-[2000ms] ease-in-out
-        ${status === 'listening' ? 'bg-[#ff5500]/10 scale-110' : 
-          status === 'thinking' ? 'bg-white/[0.03] scale-90' : 
-          status === 'speaking' ? 'bg-white/[0.05] scale-100' : 
-          'bg-white/[0.01] scale-100'}`} 
+    <div className="mx-auto flex h-[calc(100dvh-11rem)] min-h-0 w-full max-w-[1600px] overflow-hidden rounded-[26px] border border-white/[0.065] bg-[#0a0a0a] text-[#ededed] shadow-[0_28px_90px_rgba(0,0,0,0.32)] md:h-[calc(100dvh-7.25rem)] md:rounded-[30px]">
+      <ShadowConversationRail
+        conversations={sortedConversations}
+        activeKey={activeKey}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onNew={createConversation}
+        onSelect={selectConversation}
+        onRename={(key, title) => updateConversation(key, { title: title.trim() || "Sin título", updatedAt: new Date().toISOString() })}
+        onTogglePin={(key) => setConversations((current) => current.map((conversation) => conversation.key === key ? { ...conversation, pinned: !conversation.pinned, archived: false } : conversation))}
+        onArchive={toggleArchive}
       />
 
-      {/* Central Interface */}
-      <div className="flex-1 relative z-10 flex flex-col items-center justify-center w-full">
-        <motion.div 
-          animate={{ scale: status === 'listening' ? 1.05 : 1 }}
-          className="relative w-[360px] h-[360px] flex items-center justify-center mb-4"
-        >
-          <ShadowOrb status={status === 'listening' ? 'idle' : status} hideBackground={true} />
-        </motion.div>
-
-        {/* Live Subtitles / Context */}
-        <div className="h-16 flex items-center justify-center">
-          <AnimatePresence mode="wait">
-            <motion.p 
-              key={status}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="text-2xl font-light tracking-tight text-white/80 max-w-2xl text-center px-8"
-            >
-              {status === 'idle' && "Hola Andre. ¿En qué te puedo ayudar?"}
-              {status === 'listening' && <span className="text-[#ff5500]">Escuchando...</span>}
-              {status === 'thinking' && "Procesando solicitud..."}
-              {status === 'speaking' && (logs.length > 0 ? logs[logs.length - 1].replace('[SHDW] ', '') : "Ejecutando.")}
-            </motion.p>
-          </AnimatePresence>
-        </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <ShadowWorkspace
+          title={activeConversation.title}
+          logs={logs}
+          status={status}
+          loading={loadingKey === activeKey && logs.length === 0}
+          error={loadErrors[activeKey] ?? null}
+          motionPaused={motionPaused}
+          onToggleMotion={() => setMotionPaused((value) => !value)}
+          onOpenHistory={() => setHistoryOpen(true)}
+          onOpenContext={() => setContextOpen(true)}
+          onRetryLoad={() => { loadedKeys.current.delete(activeKey); void loadConversation(activeKey, true); }}
+          onSuggestion={(value) => void processCommand(value)}
+          onActionDecision={(messageId, action, approved) => void handleActionDecision(messageId, action, approved)}
+        />
+        <ShadowComposer
+          value={draft}
+          mode={composerMode}
+          status={status}
+          onChange={(value) => setDrafts((current) => ({ ...current, [activeKey]: value }))}
+          onModeChange={setComposerMode}
+          onSubmit={() => void processCommand(draft)}
+          voiceEnabled={voice.enabled}
+          voicePhase={voice.phase}
+          onListening={voice.listenNow}
+        />
       </div>
 
-      {/* Bottom HUD: Minimalist Command Input */}
-      <div className="w-full max-w-2xl z-30 px-8 pb-12">
-        <form onSubmit={handleCommandSubmit} className="relative group w-full flex items-center">
-          <div className="absolute inset-0 bg-[#0a0a0a] rounded-[24px] border border-white/[0.06] shadow-2xl transition-all group-focus-within:border-white/[0.15] group-focus-within:bg-[#0f0f0f]" />
-          <input 
-            type="text" 
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Pregúntale a Shadow..." 
-            className="w-full bg-transparent border-none outline-none text-lg text-[#ededed] px-8 py-5 placeholder:text-white/20 z-10"
-            disabled={status === 'thinking'}
-          />
-          <button 
-            type="submit"
-            disabled={!inputValue.trim() || status === 'thinking'}
-            className="absolute right-3 z-10 p-2.5 rounded-full bg-white text-black hover:scale-105 disabled:opacity-30 disabled:hover:scale-100 transition-all flex items-center justify-center"
-          >
-            <ArrowUp className="w-5 h-5 stroke-[2.5]" />
-          </button>
-        </form>
-      </div>
+      <ShadowContextRail
+        open={contextOpen}
+        onClose={() => setContextOpen(false)}
+        status={status}
+        messageCount={logs.length}
+        title={activeConversation.title}
+        pendingActions={pendingActions}
+      />
     </div>
   );
 }

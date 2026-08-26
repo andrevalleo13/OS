@@ -5,6 +5,8 @@ import ShadowOrb from "./ShadowOrb";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRightIcon } from "@radix-ui/react-icons";
 import { useState, useRef } from "react";
+import { useShadowVoice } from "@/components/shadow/ShadowVoiceProvider";
+import type { ShadowStatus } from "@/components/shadow/types";
 
 export default function GlobalShadow() {
   const pathname = usePathname();
@@ -13,11 +15,13 @@ export default function GlobalShadow() {
   const [isFocused, setIsFocused] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const voice = useShadowVoice();
 
   // Don't show the global floating orb if we are already on the dedicated /shadow page
   if (pathname === '/shadow') return null;
 
   const isExpanded = isHovered || isFocused || inputValue.length > 0;
+  const orbStatus: ShadowStatus = voice.phase === "listening" ? "listening" : voice.phase === "processing" ? "thinking" : voice.phase === "speaking" ? "speaking" : inputValue ? "thinking" : "idle";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,7 +65,7 @@ export default function GlobalShadow() {
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder="Ask Shadow..."
-              className="bg-transparent border-none outline-none text-sm text-[#ededed] w-full placeholder:text-[#555]"
+              className="os-message-input w-full border-none bg-transparent text-sm text-[#ededed] outline-none placeholder:text-[#555]"
             />
             <AnimatePresence>
               {inputValue && (
@@ -93,7 +97,7 @@ export default function GlobalShadow() {
           }}
         >
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <ShadowOrb status={inputValue ? 'thinking' : 'idle'} />
+            <ShadowOrb status={orbStatus} />
           </div>
         </motion.div>
       </div>

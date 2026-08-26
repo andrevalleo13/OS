@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
-import { History, Trophy, Activity, Target, Flame } from "lucide-react";
+import { History, Trophy, Activity, Target } from "lucide-react";
 import { MUSCLE_DETAILS, WEEKLY_ROUTINES, SessionHistory, PersonalRecord, DayRoutine } from "@/components/gym/MuscleData";
 import { logSteps, logWeight } from "@/app/actions/gym";
 import { containerVariants, itemVariants } from "@/lib/animations";
@@ -32,7 +32,7 @@ interface GymDashboardProps {
   currentWeight: number;
 }
 
-export default function GymDashboard({ sessionHistory, personalRecords, muscleStats, liftHistory, lifetimeVolume, totalWorkouts, heatmap, currentWeight }: GymDashboardProps) {
+export default function GymDashboard({ personalRecords, muscleStats, liftHistory, totalWorkouts, heatmap, currentWeight }: GymDashboardProps) {
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null);
   const [hoveredMuscle, setHoveredMuscle] = useState<string | null>(null);
   const [currentRoutine, setCurrentRoutine] = useState<DayRoutine | null>(null);
@@ -47,6 +47,9 @@ export default function GymDashboard({ sessionHistory, personalRecords, muscleSt
   useEffect(() => {
     const today = new Date().getDay();
     setCurrentRoutine(WEEKLY_ROUTINES[today]);
+    if (new URLSearchParams(window.location.search).get("intent") === "start" && !WEEKLY_ROUTINES[today].isRest) {
+      setIsTraining(true);
+    }
   }, []);
 
   const handleLogSteps = async () => {
@@ -245,7 +248,7 @@ export default function GymDashboard({ sessionHistory, personalRecords, muscleSt
                       <span>Soreness: {muscleInfo.soreness}%</span>
                       <div className="w-16 h-[2px] bg-white/5 rounded-full overflow-hidden">
                         <motion.div
-                          className="h-full rounded-full bg-[#ff0033]"
+                          className="h-full rounded-full bg-white/65"
                           initial={{ width: 0 }}
                           animate={{ width: `${muscleInfo.soreness}%` }}
                         />
@@ -400,7 +403,7 @@ export default function GymDashboard({ sessionHistory, personalRecords, muscleSt
         .custom-scrollbar::-webkit-scrollbar { width: 2px; height: 2px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
-        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(68, 136, 255, 0.5); }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.28); }
       `}</style>
     </div>
   );

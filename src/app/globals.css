@@ -1,17 +1,21 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 :root {
-  --background: #000000;
-  --foreground: #ededed;
-  --panel-bg: #0a0a0a;
-  --border-color: rgba(255, 255, 255, 0.05);
-  --accent: #ff5500;
+  /* Visual contract: ValleOS stays monochrome unless color is explicitly requested. */
+  --background: #080808;
+  --foreground: #eeeeee;
+  --panel-bg: #0d0d0d;
+  --panel-raised: #121212;
+  --border-color: rgba(238, 238, 238, 0.08);
+  --muted: #8e8e8e;
+  --accent: #b8b8b8;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
@@ -21,6 +25,82 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+  background-image:
+    radial-gradient(circle at 72% -20%, rgba(255, 255, 255, 0.045), transparent 34rem),
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: auto, 48px 48px, 48px 48px;
+  background-attachment: fixed;
+}
+
+img,
+video,
+canvas {
+  filter: grayscale(1) saturate(0);
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  outline-color: color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 3px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-style: solid;
+  outline-width: 1px;
+}
+
+.os-message-input:focus-visible {
+  outline: none;
+}
+
+::selection {
+  background: rgba(184, 184, 184, 0.24);
+  color: #f8f8f8;
+}
+
+.os-surface {
+  background: color-mix(in srgb, var(--panel-bg) 88%, transparent);
+  border: 1px solid var(--border-color);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 22px 70px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(24px);
+}
+
+html[data-compact="true"] .os-page {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+html[data-compact="true"] .os-widget {
+  padding: 1rem;
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Scrollbar minimalista */
@@ -31,9 +111,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #222;
+  background: #2d2d2d;
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #333;
+  background: #3d3d3d;
 }

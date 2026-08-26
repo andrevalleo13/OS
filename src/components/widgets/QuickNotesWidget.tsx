@@ -1,108 +1,77 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, BrainCircuit } from "lucide-react";
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { BrainCircuit, ChevronRight, Plus } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { appendObsidianNote, getRecentNotes } from "@/app/actions/obsidian";
+import type { DashboardNote } from "@/components/dashboard/types";
 import { WidgetCard, useWidget } from "@/components/ui/widget";
+import { useDashboardShortcut } from "@/hooks/useDashboardShortcut";
 
-import { getNotes, addNote } from "@/actions/notes";
+function noteTitle(name: string) {
+  return name.split("/").at(-1)?.replace(/\.md$/i, "") || name;
+}
 
-export default function QuickNotesWidget({ itemVariants }: any) {
+export default function QuickNotesWidget({ initialNotes }: { initialNotes: DashboardNote[] }) {
+  const [notes, setNotes] = useState(initialNotes);
   const [note, setNote] = useState("");
-  const [recentNotes, setRecentNotes] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const { activeWidgetId } = useWidget();
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { activeWidgetId, setActiveWidgetId } = useWidget();
   const isExpanded = activeWidgetId === "notes";
-  const isShrunk = activeWidgetId !== null && activeWidgetId !== "notes";
 
-  useEffect(() => {
-    async function loadNotes() {
-      const data = await getNotes();
-      setRecentNotes(data);
-      setIsLoading(false);
-    }
-    loadNotes();
-  }, []);
+  useEffect(() => setNotes(initialNotes), [initialNotes]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!note.trim()) return;
-    
-    // Optimistic UI update
-    const optimisticNote = { id: 'temp', title: note, time: "Just now", content: "" };
-    setRecentNotes(prev => [optimisticNote, ...prev]);
-    setNote("");
-    
-    // Save to DB
-    const newNote = await addNote(optimisticNote.title);
-    
-    // Update with real DB note
-    setRecentNotes(prev => [newNote, ...prev.filter(n => n.id !== 'temp')]);
+  useDashboardShortcut("n", () => {
+    setActiveWidgetId("notes");
+    window.setTimeout(() => inputRef.current?.focus(), 120);
+  });
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const content = note.trim();
+    if (!content) return;
+    setMessage("");
+    startTransition(async () => {
+      try {
+        await appendObsidianNote("Inbox.md", content, "Dashboard");
+        setNote("");
+        setNotes(await getRecentNotes(5));
+        setMessage("Guardado en Inbox.");
+      } catch {
+        setMessage("No se pudo guardar la nota.");
+      }
+    });
   };
 
-  const displayNotes = isExpanded ? recentNotes : recentNotes.slice(0, 2);
+  const visibleNotes = notes.slice(0, isExpanded ? 5 : 2);
 
   return (
-    <WidgetCard 
-      id="notes"
-      defaultClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[220px]"
-      expandedClassName="col-span-1 md:col-span-4 flex flex-col justify-between min-h-[400px]"
-      shrunkClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[140px]"
-    >
-      <motion.div layout className="z-10 flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-           <BrainCircuit className="w-3.5 h-3.5 text-[#ededed]" />
-           <span className="font-mono text-[10px] uppercase tracking-widest text-[#888]">
-             Second Brain
-           </span>
+    <WidgetCard id="notes" defaultClassName="min-h-[270px] md:col-span-3 xl:col-span-4" expandedClassName="min-h-[480px] md:col-span-6 xl:col-span-12" shrunkClassName="min-h-[180px] md:col-span-3 xl:col-span-4">
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5"><BrainCircuit className="h-3.5 w-3.5 text-white/45" /><div><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">Second Brain</p><p className="mt-1 text-[10px] text-white/25">Captura sin perder contexto</p></div></div>
+          <Link href="/obsidian" data-no-expand className="flex h-8 items-center gap-1 rounded-xl px-2.5 text-[10px] text-white/30 transition hover:bg-white/[0.045] hover:text-white/70 active:scale-[0.98]">Abrir <ChevronRight className="h-3 w-3" /></Link>
         </div>
-      </motion.div>
 
-      <motion.form layout onSubmit={handleSave} className="z-10 relative mb-2">
-        <input 
-          type="text"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Quick capture..."
-          className="w-full bg-white/[0.02] border border-white/[0.08] rounded-xl pl-3 pr-10 py-2.5 text-[13px] text-[#ededed] placeholder-[#666] focus:outline-none focus:border-white/[0.2] focus:bg-white/[0.04] transition-all"
-        />
-        <button type="submit" className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-transparent hover:bg-white/[0.1] text-[#888] hover:text-[#ededed] rounded-lg transition-colors">
-          <Plus className="w-4 h-4" />
-        </button>
-      </motion.form>
+        <form data-no-expand onSubmit={submit} className="relative mt-5">
+          <label htmlFor="quick-note" className="sr-only">Nota rápida</label>
+          <input id="quick-note" ref={inputRef} value={note} onChange={(event) => setNote(event.target.value)} maxLength={100_000} placeholder="Captura una idea en Inbox…" className="h-11 w-full rounded-xl border border-white/[0.075] bg-white/[0.025] pl-3 pr-11 text-xs outline-none transition placeholder:text-white/20 focus:border-white/[0.16]" />
+          <button disabled={!note.trim() || isPending} className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.07] hover:text-white/70 active:scale-95 disabled:opacity-20" aria-label="Guardar nota"><Plus className="h-3.5 w-3.5" /></button>
+        </form>
+        <p aria-live="polite" className="mt-2 min-h-4 text-[9px] text-white/30">{isPending ? "Guardando…" : message}</p>
 
-      <AnimatePresence>
-        {!isShrunk && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className={`z-10 flex flex-col gap-3 mt-4 flex-1 ${isExpanded ? 'overflow-y-auto pr-2 scrollbar-none' : ''}`}
-          >
-            {displayNotes.map((n) => (
-              <motion.div layout key={n.id} className="flex flex-col group/note cursor-default p-3 -mx-3 rounded-lg hover:bg-white/[0.02] transition-colors border border-transparent hover:border-white/[0.05]">
-                <div className="flex justify-between items-center">
-                  <span className="text-[13px] font-medium text-[#ededed] truncate max-w-[70%]">{n.title}</span>
-                  <span className="text-[10px] font-mono text-[#555]">{n.time || "Just now"}</span>
-                </div>
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }} 
-                      animate={{ opacity: 1, height: "auto" }} 
-                      exit={{ opacity: 0, height: 0 }}
-                      className="text-[12px] text-[#888] mt-2 leading-relaxed"
-                    >
-                      {n.content || "No additional content."}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <div className="mt-2 flex-1 divide-y divide-white/[0.05] overflow-y-auto border-t border-white/[0.05]">
+          {visibleNotes.length === 0 ? <div className="flex min-h-28 items-center justify-center text-xs text-white/25">Tu bóveda aún no tiene notas recientes.</div> : visibleNotes.map((item, index) => (
+            <motion.div key={item.name} layout initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04 }} className="py-3">
+              <div className="flex items-center justify-between gap-3"><p className="truncate text-[11px] text-white/60">{noteTitle(item.name)}</p><span className="shrink-0 font-mono text-[8px] uppercase tracking-wider text-white/18">Reciente</span></div>
+              <AnimatePresence initial={false}>{isExpanded && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-2 line-clamp-3 text-[10px] leading-relaxed text-white/30">{item.content.replace(/^---[\s\S]*?---/, "").trim() || "Nota sin contenido visible."}</motion.p>}</AnimatePresence>
+            </motion.div>
+          ))}
+        </div>
+      </div>
     </WidgetCard>
   );
 }

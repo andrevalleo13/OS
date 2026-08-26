@@ -1,91 +1,81 @@
-"use client";
+import { getTransactions } from "@/actions/finance";
+import { getBiometricOverview } from "@/app/actions/biometrics";
+import { getGymData } from "@/app/actions/gym";
+import { getDailyMacros } from "@/app/actions/nutrition";
+import { getRecentNotes } from "@/app/actions/obsidian";
+import { getAssignments } from "@/app/actions/university";
+import DashboardHome from "@/components/dashboard/DashboardHome";
+import type { DashboardInitialData } from "@/components/dashboard/types";
 
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import MusicModule from "@/components/MusicModule";
-import ShadowWidget from "@/components/widgets/ShadowWidget";
-import GymWidget from "@/components/widgets/GymWidget";
-import AgendaWidget from "@/components/widgets/AgendaWidget";
-import QuickNotesWidget from "@/components/widgets/QuickNotesWidget";
-import FinanceWidget from "@/components/widgets/FinanceWidget";
-import { containerVariants, itemVariants, cardHover } from "@/lib/animations";
+const emptyData: DashboardInitialData = {
+  finance: { transactions: [], balance: 4_200, spentThisWeek: 0, incomeThisWeek: 0 },
+  biometrics: {
+    latest: { weight: null, sleep: null, hrv: null, steps: null },
+    averages: { weight: null, sleep: null, hrv: null, steps: null },
+    readiness: 60,
+  },
+  nutrition: { totals: { calories: 0, protein: 0, carbs: 0, fat: 0, water: 0 }, logs: [] },
+  assignments: [],
+  gym: { totalWorkouts: 0, lifetimeVolume: 0, currentWeight: 62, sessionHistory: [] },
+  notes: [],
+};
 
-import { WidgetProvider, WidgetBackdrop } from "@/components/ui/widget";
+const emptyFinanceSource: Awaited<ReturnType<typeof getTransactions>> = {
+  transactions: [],
+  balance: 4_200,
+  spentThisWeek: 0,
+  incomeThisWeek: 0,
+};
 
-export default function Home() {
-  const [timeOfDay, setTimeOfDay] = useState("morning");
+const emptyNutritionSource: Awaited<ReturnType<typeof getDailyMacros>> = {
+  totals: emptyData.nutrition.totals,
+  logs: [],
+};
 
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) setTimeOfDay("morning");
-    else if (hour >= 12 && hour < 18) setTimeOfDay("afternoon");
-    else if (hour >= 18 && hour < 22) setTimeOfDay("evening");
-    else setTimeOfDay("night");
-  }, []);
+async function safely<T>(request: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    console.error("Dashboard source unavailable:", error);
+    return fallback;
+  }
+}
 
-  return (
-    <WidgetProvider>
-      <WidgetBackdrop />
-      <div className="relative w-full h-full min-h-screen bg-black text-[#ededed] p-4 md:p-8 selection:bg-white/20">
-      
-      {/* Linear-style Ambient Glow (Very subtle grayscale radial gradient at the top) */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-white/[0.02] rounded-full blur-[100px] pointer-events-none" />
+export default async function Home() {
+  const [finance, biometrics, nutrition, assignments, gym, notes] = await Promise.all([
+    safely(getTransactions(), emptyFinanceSource),
+    safely(getBiometricOverview(), { ...emptyData.biometrics, logs: [] }),
+    safely(getDailyMacros(), emptyNutritionSource),
+    safely(getAssignments(), []),
+    safely(getGymData(), { ...emptyData.gym, personalRecords: [], muscleStats: {}, liftHistory: {}, heatmap: {} }),
+    safely(getRecentNotes(5), emptyData.notes),
+  ]);
 
-      {/* Main Content / Bento Grid */}
-      <motion.main 
-        layout
-        initial="hidden"
-        animate="visible"
-        variants={containerVariants}
-        className="w-full grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 auto-rows-[auto] relative z-10"
-      >
-        
-        {/* The JARVIS Core - Always top and spans full width */}
-        <ShadowWidget />
+  const initialData: DashboardInitialData = {
+    finance: {
+      ...finance,
+      transactions: finance.transactions.map((transaction) => ({ ...transaction, date: transaction.date.toISOString() })),
+    },
+    biometrics: { latest: biometrics.latest, averages: biometrics.averages, readiness: biometrics.readiness },
+    nutrition: {
+      totals: nutrition.totals,
+      logs: nutrition.logs.map((log) => ({ ...log, date: log.date.toISOString() })),
+    },
+    assignments: assignments.map((assignment) => ({
+      id: assignment.id,
+      title: assignment.title,
+      dueDate: assignment.dueDate.toISOString(),
+      status: assignment.status,
+      course: { id: assignment.course.id, name: assignment.course.name },
+    })),
+    gym: {
+      totalWorkouts: gym.totalWorkouts,
+      lifetimeVolume: gym.lifetimeVolume,
+      currentWeight: gym.currentWeight,
+      sessionHistory: gym.sessionHistory,
+    },
+    notes,
+  };
 
-        {/* Dynamic Layout based on Time of Day */}
-        {timeOfDay === "morning" && (
-          <>
-            <GymWidget itemVariants={itemVariants} />
-            <AgendaWidget itemVariants={itemVariants} />
-            <QuickNotesWidget itemVariants={itemVariants} />
-            <FinanceWidget itemVariants={itemVariants} />
-            <MusicModule itemVariants={itemVariants} cardHover={{ y: -2 }} />
-          </>
-        )}
-
-        {timeOfDay === "afternoon" && (
-          <>
-            <AgendaWidget itemVariants={itemVariants} />
-            <QuickNotesWidget itemVariants={itemVariants} />
-            <FinanceWidget itemVariants={itemVariants} />
-            <GymWidget itemVariants={itemVariants} />
-            <MusicModule itemVariants={itemVariants} cardHover={{ y: -2 }} />
-          </>
-        )}
-
-        {timeOfDay === "evening" && (
-          <>
-            <MusicModule itemVariants={itemVariants} cardHover={{ y: -2 }} />
-            <QuickNotesWidget itemVariants={itemVariants} />
-            <FinanceWidget itemVariants={itemVariants} />
-            <AgendaWidget itemVariants={itemVariants} />
-            <GymWidget itemVariants={itemVariants} />
-          </>
-        )}
-
-        {timeOfDay === "night" && (
-          <>
-            <MusicModule itemVariants={itemVariants} cardHover={{ y: -2 }} />
-            <QuickNotesWidget itemVariants={itemVariants} />
-            <AgendaWidget itemVariants={itemVariants} />
-            <FinanceWidget itemVariants={itemVariants} />
-            <GymWidget itemVariants={itemVariants} />
-          </>
-        )}
-
-      </motion.main>
-    </div>
-    </WidgetProvider>
-  );
+  return <DashboardHome initialData={initialData} />;
 }

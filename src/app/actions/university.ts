@@ -1,12 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
-});
 
 export async function getCourses() {
   return await prisma.course.findMany({
@@ -25,6 +21,19 @@ export async function getAssignments() {
     orderBy: { dueDate: "asc" },
     include: { course: true }
   });
+}
+
+export async function updateAssignmentStatus(id: string, status: "pending" | "in-progress" | "done") {
+  const assignmentId = z.string().uuid().parse(id);
+  const safeStatus = z.enum(["pending", "in-progress", "done"]).parse(status);
+  const assignment = await prisma.assignment.update({
+    where: { id: assignmentId },
+    data: { status: safeStatus },
+    include: { course: true },
+  });
+  revalidatePath("/");
+  revalidatePath("/uni");
+  return assignment;
 }
 
 export async function seedUniversityData() {
@@ -47,7 +56,7 @@ export async function seedUniversityData() {
   // 1. Presupuestos (sáb)
   await prisma.course.create({
     data: { 
-      name: "Presupuestos", professor: "Asignado", schedule: "Sáb", color: "#ef4444", currentGrade: 0,
+      name: "Presupuestos", professor: "Asignado", schedule: "Sáb", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -62,7 +71,7 @@ export async function seedUniversityData() {
   // 2. Derecho Laboral (mié)
   await prisma.course.create({
     data: { 
-      name: "Derecho Laboral", professor: "Asignado", schedule: "Mié", color: "#a855f7", currentGrade: 0,
+      name: "Derecho Laboral", professor: "Asignado", schedule: "Mié", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -77,7 +86,7 @@ export async function seedUniversityData() {
   // 3. Análisis Técnico (mar)
   await prisma.course.create({
     data: { 
-      name: "Análisis Técnico", professor: "Asignado", schedule: "Mar", color: "#14b8a6", currentGrade: 0,
+      name: "Análisis Técnico", professor: "Asignado", schedule: "Mar", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -92,7 +101,7 @@ export async function seedUniversityData() {
   // 4. Mercados Bursátiles (Cátedra) (jue)
   await prisma.course.create({
     data: { 
-      name: "Mercados Bursátiles", professor: "Cátedra", schedule: "Jue", color: "#22c55e", currentGrade: 0,
+      name: "Mercados Bursátiles", professor: "Cátedra", schedule: "Jue", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -107,7 +116,7 @@ export async function seedUniversityData() {
   // 5. Probabilidad y Estadística Descriptiva (lun)
   await prisma.course.create({
     data: { 
-      name: "Prob. y Estadística", professor: "Asignado", schedule: "Lun", color: "#f59e0b", currentGrade: 0,
+      name: "Prob. y Estadística", professor: "Asignado", schedule: "Lun", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -122,7 +131,7 @@ export async function seedUniversityData() {
   // 6. Análisis Financiero (mié)
   await prisma.course.create({
     data: { 
-      name: "Análisis Financiero", professor: "Asignado", schedule: "Mié", color: "#06b6d4", currentGrade: 0,
+      name: "Análisis Financiero", professor: "Asignado", schedule: "Mié", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -137,7 +146,7 @@ export async function seedUniversityData() {
   // 7. Competencias Personales (mié)
   await prisma.course.create({
     data: { 
-      name: "Competencias Personales", professor: "Asignado", schedule: "Mié", color: "#ec4899", currentGrade: 0,
+      name: "Competencias Personales", professor: "Asignado", schedule: "Mié", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -157,7 +166,7 @@ export async function seedUniversityData() {
   // 8. Análisis y Procesamiento de la Info
   await prisma.course.create({
     data: { 
-      name: "Análisis y Proc. de Info", professor: "Asignado", schedule: "Lun/Jue 7:00am", color: "#dc2626", currentGrade: 0,
+      name: "Análisis y Proc. de Info", professor: "Asignado", schedule: "Lun/Jue 7:00am", color: "#8a8a8a", currentGrade: 0,
       absences: 2, maxAbsences: 6,
       assignments: {
         create: [
@@ -172,7 +181,7 @@ export async function seedUniversityData() {
   // 9. Finanzas Corporativas
   await prisma.course.create({
     data: { 
-      name: "Finanzas Corporativas", professor: "Asignado", schedule: "Lun/Jue 10:30am", color: "#f87171", currentGrade: 0,
+      name: "Finanzas Corporativas", professor: "Asignado", schedule: "Lun/Jue 10:30am", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -187,7 +196,7 @@ export async function seedUniversityData() {
   // 10. Derivados Financieros
   await prisma.course.create({
     data: { 
-      name: "Derivados Financieros", professor: "Asignado", schedule: "Lun/Vie 1:30pm", color: "#ea580c", currentGrade: 0,
+      name: "Derivados Financieros", professor: "Asignado", schedule: "Lun/Vie 1:30pm", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -202,7 +211,7 @@ export async function seedUniversityData() {
   // 11. Introducción al Cristianismo
   await prisma.course.create({
     data: { 
-      name: "Intro al Cristianismo", professor: "Asignado", schedule: "Mar/Vie 10:00am", color: "#9333ea", currentGrade: 0,
+      name: "Intro al Cristianismo", professor: "Asignado", schedule: "Mar/Vie 10:00am", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -217,7 +226,7 @@ export async function seedUniversityData() {
   // 12. Estadística Inferencial
   await prisma.course.create({
     data: { 
-      name: "Estadística Inferencial", professor: "Asignado", schedule: "Mar/Jue 2:00pm", color: "#0284c7", currentGrade: 0,
+      name: "Estadística Inferencial", professor: "Asignado", schedule: "Mar/Jue 2:00pm", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -232,7 +241,7 @@ export async function seedUniversityData() {
   // 13. Macroeconomía
   await prisma.course.create({
     data: { 
-      name: "Macroeconomía", professor: "Asignado", schedule: "Mié 7:00am", color: "#6366f1", currentGrade: 0,
+      name: "Macroeconomía", professor: "Asignado", schedule: "Mié 7:00am", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -247,7 +256,7 @@ export async function seedUniversityData() {
   // 14. Análisis de Inversiones
   await prisma.course.create({
     data: { 
-      name: "Análisis de Inversiones", professor: "Asignado", schedule: "Mié 4:00pm", color: "#4338ca", currentGrade: 0,
+      name: "Análisis de Inversiones", professor: "Asignado", schedule: "Mié 4:00pm", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [
@@ -262,7 +271,7 @@ export async function seedUniversityData() {
   // 15. Fintech
   await prisma.course.create({
     data: { 
-      name: "Fintech", professor: "Asignado", schedule: "Jue/Vie 8:30am / 12pm", color: "#10b981", currentGrade: 0,
+      name: "Fintech", professor: "Asignado", schedule: "Jue/Vie 8:30am / 12pm", color: "#8a8a8a", currentGrade: 0,
       absences: 0, maxAbsences: 6,
       assignments: {
         create: [

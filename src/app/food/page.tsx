@@ -1,13 +1,30 @@
-import { getDailyMacros, getMonthlyHistory } from "@/app/actions/nutrition";
+import { getDailyMacros, getConsistencyHistory } from "@/app/actions/nutrition";
 import NutritionDashboard from "@/components/food/NutritionDashboard";
+import { NUTRITION_GOALS, normalizeStoredBreakdown } from "@/features/nutrition/nutrition";
+import { serverConfig } from "@/lib/config";
+import { connection } from "next/server";
 
 export default async function FoodPage() {
-  const { totals, logs } = await getDailyMacros();
-  const monthlyHistory = await getMonthlyHistory();
+  await connection();
+  const [{ totals, logs }, monthlyHistory] = await Promise.all([
+    getDailyMacros(),
+    getConsistencyHistory(),
+  ]);
+  const serializedLogs = logs.map((log) => ({
+    ...log,
+    date: log.date.toISOString(),
+    breakdown: normalizeStoredBreakdown(log.breakdown),
+  }));
 
   return (
-    <div className="w-full h-full p-8 md:p-12 overflow-y-auto custom-scrollbar">
-      <NutritionDashboard dailyTotals={totals} logs={logs} monthlyHistory={monthlyHistory} />
+    <div className="h-full w-full overflow-y-auto px-4 py-5 custom-scrollbar md:px-8 md:py-8">
+      <NutritionDashboard
+        dailyTotals={totals}
+        goals={NUTRITION_GOALS}
+        logs={serializedLogs}
+        monthlyHistory={monthlyHistory}
+        timezone={serverConfig.timezone}
+      />
     </div>
   );
 }

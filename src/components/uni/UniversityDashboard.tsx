@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { containerVariants, itemVariants } from "@/lib/animations";
-import { GraduationCap, BookOpen, Clock, AlertCircle, Sparkles, ChevronRight, Terminal } from "lucide-react";
+import { Calculator, Clock, AlertCircle, Terminal } from "lucide-react";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts";
 // Calculator is now pure math, no server action needed
 
@@ -34,13 +34,8 @@ export default function UniversityDashboard({ courses, assignments }: { courses:
       initial="hidden"
       animate="visible"
     >
-      {/* Header & Semester Hourglass */}
+      {/* Semester progress */}
       <motion.div variants={itemVariants} className="flex flex-col gap-4 border-b border-[#222] pb-6">
-        <div className="flex items-center gap-2 text-gray-500 font-mono text-xs uppercase tracking-widest">
-          <GraduationCap className="w-4 h-4" />
-          <span>Centro de Comando Académico</span>
-        </div>
-        
         <div className="flex flex-col gap-2">
           <div className="flex justify-between text-[10px] font-mono text-gray-400">
             <span>Inicio de Semestre (Ago)</span>
@@ -79,10 +74,9 @@ export default function UniversityDashboard({ courses, assignments }: { courses:
 
           {/* Shadow Tutor */}
           <motion.div variants={itemVariants} className="bg-[#000] border border-[#111] rounded-xl p-5 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-purple-900/20 to-transparent blur-xl pointer-events-none" />
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <h3 className="text-[10px] text-purple-400/80 font-mono uppercase tracking-widest">Calculadora de Calificaciones</h3>
+              <Calculator className="w-4 h-4 text-white/45" />
+              <h3 className="text-[10px] text-white/45 font-mono uppercase tracking-widest">Calculadora de Calificaciones</h3>
             </div>
             <GradeCalculator courses={courses} />
           </motion.div>
@@ -102,31 +96,31 @@ export default function UniversityDashboard({ courses, assignments }: { courses:
               return (
                 <div 
                   key={course.id} 
-                  className={`bg-[#000] border ${isDanger ? 'border-red-900/50 shadow-[0_0_15px_rgba(220,38,38,0.1)]' : 'border-[#111] hover:border-[#333]'} rounded-xl p-4 flex flex-col gap-3 transition-all relative overflow-hidden group`}
+                  className={`bg-[#000] border ${isDanger ? 'border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.04)]' : 'border-[#111] hover:border-[#333]'} rounded-xl p-4 flex flex-col gap-3 transition-all relative overflow-hidden group`}
                 >
-                  <div className="absolute top-0 left-0 w-[2px] h-full opacity-50 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: course.color }} />
+                  <div className="absolute left-0 top-0 h-full w-[2px] bg-white/45 opacity-50 transition-opacity group-hover:opacity-100" />
                   
                   <div className="flex justify-between items-start pl-2">
                     <div className="flex flex-col">
                       <span className="text-sm text-gray-200 font-medium">{course.name}</span>
                       <span className="text-[10px] text-gray-500 font-mono mt-1">{course.professor}</span>
                     </div>
-                    <span className="text-lg font-mono tracking-tighter" style={{ color: course.color }}>{course.currentGrade}%</span>
+                    <span className="font-mono text-lg tracking-tighter text-white/70">{course.currentGrade}%</span>
                   </div>
                   
                   {/* Absences Dot Track */}
                   <div className="pl-2 flex flex-col gap-1.5 mt-2">
                     <div className="flex justify-between items-center">
-                      <span className={`text-[9px] font-mono uppercase tracking-widest ${isDanger ? 'text-red-500' : isWarning ? 'text-orange-500' : 'text-gray-600'}`}>
+                      <span className={`text-[9px] font-mono uppercase tracking-widest ${isDanger ? 'text-white/75' : isWarning ? 'text-white/55' : 'text-gray-600'}`}>
                         Faltas ({absences}/{maxAbsences})
                       </span>
-                      {isDanger && <AlertCircle className="w-3 h-3 text-red-500" />}
+                      {isDanger && <AlertCircle className="h-3 w-3 text-white/75" />}
                     </div>
                     <div className="flex gap-1">
                       {Array.from({ length: maxAbsences }).map((_, i) => (
                         <div 
                           key={i} 
-                          className={`flex-1 h-1 rounded-full ${i < absences ? (isDanger ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]' : 'bg-orange-500') : 'bg-[#1a1a1a]'}`} 
+                          className={`h-1 flex-1 rounded-full ${i < absences ? (isDanger ? 'bg-white/70 shadow-[0_0_5px_rgba(255,255,255,0.2)]' : 'bg-white/45') : 'bg-[#1a1a1a]'}`} 
                         />
                       ))}
                     </div>
@@ -160,10 +154,10 @@ export default function UniversityDashboard({ courses, assignments }: { courses:
                   return (
                     <div 
                       key={assignment.id} 
-                      className={`flex items-center justify-between p-3 rounded-lg border ${isUrgent ? 'border-[#ff5500]/50 bg-[#ff5500]/5' : isOverdue ? 'border-red-900/50 bg-red-900/10' : 'border-[#1a1a1a] bg-[#111]/50'} transition-colors`}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${isUrgent ? 'border-white/15 bg-white/[0.035]' : isOverdue ? 'border-white/20 bg-white/[0.045]' : 'border-[#1a1a1a] bg-[#111]/50'} transition-colors`}
                     >
                       <div className="flex flex-col gap-1">
-                        <span className={`text-xs font-medium ${isUrgent ? 'text-[#ff5500]' : isOverdue ? 'text-red-500' : 'text-gray-300'}`}>
+                        <span className={`text-xs font-medium ${isUrgent ? 'text-white/80' : isOverdue ? 'text-white/70' : 'text-gray-300'}`}>
                           {assignment.title}
                         </span>
                         <span className="text-[9px] font-mono text-gray-500">
@@ -171,7 +165,7 @@ export default function UniversityDashboard({ courses, assignments }: { courses:
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className={`text-[10px] font-mono ${isUrgent ? 'text-[#ff5500]' : 'text-gray-500'}`}>
+                        <span className={`text-[10px] font-mono ${isUrgent ? 'text-white/55' : 'text-gray-500'}`}>
                           {mounted ? new Date(assignment.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : "..."}
                         </span>
                       </div>
@@ -243,10 +237,10 @@ function GradeCalculator({ courses }: { courses: any[] }) {
       </div>
       
       {/* Resultado instantáneo */}
-      <div className={`mt-2 p-4 rounded-lg border ${alreadyPassed ? 'border-green-900/50 bg-green-900/5' : isPossible ? 'border-[#1a1a1a] bg-[#0a0a0a]' : 'border-red-900/50 bg-red-900/5'}`}>
+      <div className={`mt-2 p-4 rounded-lg border ${alreadyPassed ? 'border-white/15 bg-white/[0.03]' : isPossible ? 'border-[#1a1a1a] bg-[#0a0a0a]' : 'border-white/20 bg-white/[0.045]'}`}>
         <div className="flex items-baseline justify-between">
           <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">Necesitas sacar</span>
-          <span className={`text-2xl font-mono font-bold tracking-tighter ${alreadyPassed ? 'text-green-400' : isPossible ? (isEasy ? 'text-green-400' : 'text-white') : 'text-red-500'}`}>
+          <span className={`text-2xl font-mono font-bold tracking-tighter ${alreadyPassed ? 'text-white/65' : isPossible ? (isEasy ? 'text-white/65' : 'text-white') : 'text-white/80'}`}>
             {alreadyPassed ? "✓" : requiredGrade.toFixed(1)}
           </span>
         </div>

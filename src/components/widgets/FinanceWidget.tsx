@@ -1,150 +1,97 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { DollarSign, ArrowUpRight } from "lucide-react";
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowDownLeft, ArrowUpRight, ChevronRight, CircleDollarSign } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { addTransaction, getTransactions } from "@/actions/finance";
+import type { DashboardFinance } from "@/components/dashboard/types";
 import { WidgetCard, useWidget } from "@/components/ui/widget";
+import { useDashboardShortcut } from "@/hooks/useDashboardShortcut";
 
-import { getTransactions, addTransaction } from "@/actions/finance";
+const currency = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
 
-export default function FinanceWidget({ itemVariants }: any) {
-  const [expense, setExpense] = useState("");
-  const [balance, setBalance] = useState(4200);
-  const [spent, setSpent] = useState(0);
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  const { activeWidgetId } = useWidget();
+export default function FinanceWidget({ initialData }: { initialData: DashboardFinance }) {
+  const [data, setData] = useState(initialData);
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("General");
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const amountRef = useRef<HTMLInputElement>(null);
+  const { activeWidgetId, setActiveWidgetId } = useWidget();
   const isExpanded = activeWidgetId === "finance";
-  const isShrunk = activeWidgetId !== null && activeWidgetId !== "finance";
+  const netFlow = data.incomeThisWeek - data.spentThisWeek;
+  const spendingRatio = Math.min(100, data.spentThisWeek / Math.max(data.incomeThisWeek, 5_000) * 100);
 
-  const budget = 5000;
-  const progress = (spent / budget) * 100;
+  useEffect(() => setData(initialData), [initialData]);
 
-  useEffect(() => {
-    async function loadData() {
-      const data = await getTransactions();
-      setTransactions(data.transactions);
-      setBalance(data.balance);
-      setSpent(data.spentThisWeek);
-      setIsLoading(false);
-    }
-    loadData();
-  }, []);
+  useDashboardShortcut("e", () => {
+    setActiveWidgetId("finance");
+    window.setTimeout(() => amountRef.current?.focus(), 120);
+  });
 
-  const handleAddExpense = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(expense);
-    if (isNaN(amount) || amount <= 0) return;
-    
-    setExpense("");
-    // Optimistic UI update
-    const optimisticTx = { id: 'temp', amount: -amount, desc: "Quick Expense", time: "Just now" };
-    setTransactions(prev => [optimisticTx, ...prev]);
-    setBalance(prev => prev - amount);
-    setSpent(prev => prev + amount);
-    
-    await addTransaction(-amount);
-    
-    // Refresh real data
-    const data = await getTransactions();
-    setTransactions(data.transactions);
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const parsed = Number(amount);
+    if (!Number.isFinite(parsed) || parsed <= 0) { setMessage("Ingresa un monto válido."); return; }
+    setMessage("");
+    startTransition(async () => {
+      try {
+        await addTransaction({ amount: -parsed, category, note: "Registrado desde el centro de mando" });
+        const refreshed = await getTransactions();
+        setData({ ...refreshed, transactions: refreshed.transactions.map((transaction) => ({ ...transaction, date: transaction.date.toISOString() })) });
+        setAmount("");
+        setMessage("Gasto registrado.");
+      } catch {
+        setMessage("No se pudo registrar el gasto.");
+      }
+    });
   };
 
   return (
-    <WidgetCard 
-      id="finance"
-      defaultClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[220px]"
-      expandedClassName="col-span-1 md:col-span-4 flex flex-col justify-between min-h-[400px]"
-      shrunkClassName="col-span-1 md:col-span-2 flex flex-col justify-between min-h-[140px]"
-    >
-      <motion.div layout className="z-10 flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-           <DollarSign className="w-3.5 h-3.5 text-[#ededed]" />
-           <span className="font-mono text-[10px] uppercase tracking-widest text-[#888]">
-             Cash Flow
-           </span>
+    <WidgetCard id="finance" defaultClassName="min-h-[270px] md:col-span-3 xl:col-span-4" expandedClassName="min-h-[480px] md:col-span-6 xl:col-span-12" shrunkClassName="min-h-[180px] md:col-span-3 xl:col-span-4">
+      <div className="relative z-10 flex h-full flex-col">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5"><CircleDollarSign className="h-3.5 w-3.5 text-white/45" /><div><p className="font-mono text-[9px] uppercase tracking-[0.18em] text-white/35">Finanzas</p><p className="mt-1 text-[10px] text-white/25">Flujo de esta semana</p></div></div>
+          <Link href="/finances" data-no-expand className="flex h-8 items-center gap-1 rounded-xl px-2.5 text-[10px] text-white/30 transition hover:bg-white/[0.045] hover:text-white/70 active:scale-[0.98]">Abrir <ChevronRight className="h-3 w-3" /></Link>
         </div>
-      </motion.div>
 
-      <motion.div layout className={`z-10 ${isShrunk ? 'mt-auto mb-auto text-center' : 'mt-auto'}`}>
-        <motion.div layout className={`${isShrunk ? 'text-4xl' : 'text-3xl'} font-normal tracking-tight text-[#ededed]`}>
-          ${balance.toLocaleString()}
-        </motion.div>
-        <motion.div layout className="text-[10px] text-[#666] font-mono mt-1 uppercase tracking-widest">
-          Available this week
-        </motion.div>
-      </motion.div>
+        <div className="mt-6 grid grid-cols-[1fr_auto] items-end gap-4">
+          <div><p className="text-3xl font-medium tracking-[-0.055em] text-white/85">{currency.format(data.balance)}</p><p className="mt-1 font-mono text-[8px] uppercase tracking-[0.16em] text-white/25">Disponible</p></div>
+          <div className="text-right"><p className={`font-mono text-[11px] ${netFlow >= 0 ? "text-white/60" : "text-white/35"}`}>{netFlow >= 0 ? "+" : "−"}{currency.format(Math.abs(netFlow))}</p><p className="mt-1 text-[9px] text-white/20">flujo neto</p></div>
+        </div>
+        <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/[0.045]"><motion.div initial={{ scaleX: 0 }} animate={{ scaleX: spendingRatio / 100 }} style={{ transformOrigin: "left" }} className="h-full w-full rounded-full bg-white/45" /></div>
 
-      {/* Expanded view */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-6 flex flex-col gap-5 overflow-hidden flex-1"
-          >
-            <div className="w-full h-[1px] bg-white/[0.05]" />
-            
-            {/* Mini Budget Bar */}
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between text-[10px] font-mono uppercase tracking-widest text-[#888]">
-                <span>Spent: ${spent}</span>
-                <span>Budget: ${budget}</span>
-              </div>
-              <div className="w-full bg-white/[0.05] h-1.5 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-red-400 rounded-full" 
-                  style={{ width: `${progress}%` }} 
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2 flex-1 overflow-y-auto scrollbar-none pr-2">
-              <h4 className="text-[10px] font-mono text-[#888] uppercase tracking-widest mb-1">Recent Transactions</h4>
-              {transactions.map((tx, i) => (
-                <div key={tx.id || i} className="flex justify-between items-center text-sm p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                  <span className="text-[#ededed]">{tx.desc || tx.category}</span>
-                  <div className="flex flex-col items-end">
-                    <span className={tx.amount > 0 ? "text-green-400" : "text-[#888]"}>
-                      {tx.amount > 0 ? '+' : ''}{tx.amount.toFixed(2)}
-                    </span>
-                    <span className="text-[10px] text-[#555] font-mono">
-                      {tx.time || (tx.date ? new Date(tx.date).toLocaleDateString() : 'Just now')}
-                    </span>
-                  </div>
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="mt-5 flex-1 border-t border-white/[0.055] pt-4">
+              <p className="mb-2 font-mono text-[8px] uppercase tracking-[0.16em] text-white/25">Actividad reciente</p>
+              {data.transactions.length === 0 ? <div className="flex min-h-28 items-center justify-center text-xs text-white/25">Todavía no hay movimientos.</div> : (
+                <div className="max-h-48 divide-y divide-white/[0.05] overflow-y-auto">
+                  {data.transactions.slice(0, 6).map((transaction) => (
+                    <div key={transaction.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 py-2.5">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.035] text-white/30">{transaction.amount > 0 ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}</span>
+                      <div className="min-w-0"><p className="truncate text-[11px] text-white/60">{transaction.category}</p><p className="mt-0.5 truncate text-[9px] text-white/20">{transaction.note || new Date(transaction.date).toLocaleDateString("es-MX")}</p></div>
+                      <span className="font-mono text-[10px] text-white/45">{transaction.amount > 0 ? "+" : "−"}{currency.format(Math.abs(transaction.amount))}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      <AnimatePresence>
-        {!isShrunk && (
-          <motion.form 
-            layout 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            onSubmit={handleAddExpense} 
-            className="z-10 mt-6 relative w-full"
-          >
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666] text-sm">$</div>
-            <input 
-              type="number"
-              value={expense}
-              onChange={(e) => setExpense(e.target.value)}
-              placeholder="Quick expense..."
-              className="w-full bg-white/[0.02] border border-white/[0.08] rounded-xl pl-7 pr-10 py-2.5 text-[13px] text-[#ededed] placeholder-[#666] focus:outline-none focus:border-white/[0.2] focus:bg-white/[0.04] transition-all"
-            />
-            <button type="submit" className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center bg-transparent hover:bg-white/[0.1] text-[#888] hover:text-[#ededed] rounded-lg transition-colors">
-              <ArrowUpRight className="w-4 h-4" />
-            </button>
-          </motion.form>
-        )}
-      </AnimatePresence>
+        <form data-no-expand onSubmit={submit} className="mt-5" aria-label="Registrar gasto rápido">
+          <div className="grid grid-cols-[1fr_108px_auto] gap-2">
+            <label className="sr-only" htmlFor="quick-expense">Monto</label>
+            <div className="flex h-10 items-center rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 focus-within:border-white/[0.16]"><span className="text-xs text-white/25">$</span><input id="quick-expense" ref={amountRef} value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" placeholder="Gasto rápido" className="h-full min-w-0 flex-1 bg-transparent px-2 text-xs outline-none placeholder:text-white/20" /></div>
+            <label className="sr-only" htmlFor="quick-expense-category">Categoría</label>
+            <select id="quick-expense-category" value={category} onChange={(event) => setCategory(event.target.value)} className="h-10 rounded-xl border border-white/[0.07] bg-[#121212] px-2 text-[10px] text-white/50 outline-none"><option>General</option><option>Comida</option><option>Transporte</option><option>Educación</option><option>Salud</option><option>Entretenimiento</option></select>
+            <button disabled={isPending || !amount} className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#111] transition active:scale-[0.96] disabled:opacity-25" aria-label="Registrar gasto"><ArrowUpRight className="h-3.5 w-3.5" /></button>
+          </div>
+          <p aria-live="polite" className="mt-2 min-h-4 text-[9px] text-white/30">{isPending ? "Registrando…" : message}</p>
+        </form>
+      </div>
     </WidgetCard>
   );
 }

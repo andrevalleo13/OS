@@ -1,445 +1,502 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Loader2, Utensils, Flame, Droplets, Wheat, History, Egg, Terminal, Sparkles, ChevronDown } from "lucide-react";
-import { logFood, logWater, getShadowMacroAdvice } from "@/app/actions/nutrition";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Activity,
+  Brain,
+  ChevronDown,
+  Copy,
+  Droplets,
+  Dumbbell,
+  Flame,
+  Loader2,
+  Pencil,
+  Save,
+  ScanLine,
+  Trash2,
+  Utensils,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  deleteFoodLog,
+  duplicateFoodLog,
+  getShadowMacroAdvice,
+  logWater,
+  updateFoodLog,
+} from "@/app/actions/nutrition";
+import NutritionComposer from "@/components/food/NutritionComposer";
+import ShadowOrb from "@/components/ShadowOrb";
+import {
+  sumNutritionItems,
+  type FoodAnalysisItem,
+  type FoodLogView,
+  type MacroTotals,
+  type ShadowNutritionInsight,
+} from "@/features/nutrition/nutrition";
 import { containerVariants, itemVariants } from "@/lib/animations";
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
-export default function NutritionDashboard({ dailyTotals, logs, monthlyHistory }: { dailyTotals: any, logs: any[], monthlyHistory?: any }) {
-  const [input, setInput] = useState("");
-  const [isLogging, setIsLogging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+type HistoryDay = Omit<MacroTotals, "water">;
+type History = Record<string, HistoryDay>;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-
-    setIsLogging(true);
-    setError(null);
-    try {
-      await logFood(input);
-      setInput("");
-    } catch (err: any) {
-      setError(err.message || "Failed to log food");
-      setIsLogging(false);
-    }
-  };
-
-  const handleWaterSubmit = async (amount: number) => {
-    try {
-      await logWater(amount);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const MACRO_GOALS = {
-    calories: 2850,
-    protein: 135,
-    carbs: 365,
-    fat: 95,
-    water: 3.0
-  };
-
-  const getProgress = (current: number, goal: number) => {
-    const progress = (current / goal) * 100;
-    return progress > 100 ? 100 : progress;
-  };
-
-  const chartData = logs.slice().reverse().map(log => ({
-    time: new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    calories: log.calories,
-  }));
+export default function NutritionDashboard({
+  dailyTotals,
+  goals,
+  logs,
+  monthlyHistory,
+  timezone,
+}: {
+  dailyTotals: MacroTotals;
+  goals: Readonly<MacroTotals>;
+  logs: FoodLogView[];
+  monthlyHistory: History;
+  timezone: string;
+}) {
+  const refreshKey = `${Math.round(dailyTotals.calories)}-${Math.round(dailyTotals.protein)}-${logs.length}`;
 
   return (
-    <motion.div 
-      className="flex flex-col gap-6 w-full max-w-7xl mx-auto pb-24"
+    <motion.main
       variants={containerVariants}
       initial="hidden"
       animate="visible"
+      className="mx-auto flex w-full max-w-[1400px] flex-col gap-5 pb-24"
     >
-      <motion.div variants={itemVariants} className="flex justify-between items-end border-b border-[#222] pb-4">
-        <div>
-          <h1 className="text-xs text-gray-500 font-mono tracking-[0.2em] uppercase mb-1">Protocolo de Nutrición</h1>
-          <div className="text-xs text-gray-400 font-mono">
-            Meta: <span className="text-white">{MACRO_GOALS.calories} kcal</span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Terminal Input */}
-      <motion.div variants={itemVariants} className="relative group">
-        <form onSubmit={handleSubmit} className="relative flex items-center">
-          <div className="absolute left-4 text-gray-500">
-            <Utensils className="w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Registrar comida (ej. '2 huevos, pan tostado y café')..."
-            className="w-full bg-transparent border border-[#222] rounded-xl py-4 pl-12 pr-12 text-sm text-gray-200 placeholder:text-[#555] focus:outline-none focus:border-[#444] transition-colors font-mono"
-            disabled={isLogging}
-          />
-          <button 
-            type="submit" 
-            disabled={isLogging || !input.trim()}
-            className="absolute right-3 p-2 bg-white text-black rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:bg-[#222] disabled:text-gray-500 transition-colors flex items-center justify-center"
-          >
-            {isLogging ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          </button>
-        </form>
-        {error && <p className="text-red-500 text-xs mt-2 font-mono ml-4">{error}</p>}
-      </motion.div>
-
-      {/* Macro Rings */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <MacroCard 
-          title="Calorías" 
-          icon={<Flame className="w-3.5 h-3.5 text-gray-500" />}
-          current={dailyTotals.calories} 
-          goal={MACRO_GOALS.calories} 
-          unit="kcal"
-          color="stroke-white"
-        />
-        <MacroCard 
-          title="Proteína" 
-          icon={<Utensils className="w-3.5 h-3.5 text-gray-500" />}
-          current={dailyTotals.protein} 
-          goal={MACRO_GOALS.protein} 
-          unit="g"
-          color="stroke-white"
-        />
-        <MacroCard 
-          title="Carbohidratos" 
-          icon={<Wheat className="w-3.5 h-3.5 text-gray-500" />}
-          current={dailyTotals.carbs} 
-          goal={MACRO_GOALS.carbs} 
-          unit="g"
-          color="stroke-white"
-        />
-        <MacroCard 
-          title="Grasas" 
-          icon={<Egg className="w-3.5 h-3.5 text-gray-500" />}
-          current={dailyTotals.fat} 
-          goal={MACRO_GOALS.fat} 
-          unit="g"
-          color="stroke-white"
-        />
-        <WaterCard 
-          current={dailyTotals.water || 0}
-          goal={MACRO_GOALS.water}
-          onAdd={handleWaterSubmit}
-        />
-      </motion.div>
-
-      {/* Shadow Advice */}
       <motion.div variants={itemVariants}>
-        <ShadowAdvice current={dailyTotals} goal={MACRO_GOALS} />
+        <NutritionComposer />
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Logs */}
-        <motion.div variants={itemVariants} className="lg:col-span-2">
-          <div className="flex items-center gap-2 mb-4">
-            <History className="w-4 h-4 text-gray-500" />
-            <h2 className="text-xs font-mono text-gray-500 uppercase tracking-widest">Registro de Hoy</h2>
-          </div>
-          
-          <div className="space-y-3">
-            <AnimatePresence>
-              {logs.length === 0 ? (
-                <motion.div 
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  className="p-8 border border-dashed border-[#222] rounded-xl flex items-center justify-center text-xs text-gray-500 font-mono"
-                >
-                  No hay comidas registradas hoy.
-                </motion.div>
-              ) : (
-                logs.map((log: any) => (
-                  <FoodLogItem key={log.id} log={log} />
-                ))
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
+      <motion.section variants={itemVariants} className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.55fr)]">
+        <DailyNutritionSummary totals={dailyTotals} goals={goals} />
+        <ShadowHealthPanel refreshKey={refreshKey} />
+      </motion.section>
 
-        {/* Right Column: Charts & Heatmap */}
-        <motion.div variants={itemVariants} className="flex flex-col gap-6">
-          {/* Area Chart */}
-          <div className="bg-transparent border border-[#222] rounded-xl p-5">
-            <h3 className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-4">Picos de Energía</h3>
-            <div className="h-40 w-full">
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorCal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ffffff" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="#ffffff" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="time" stroke="#333" fontSize={10} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid #222', borderRadius: '8px', fontSize: '10px', fontFamily: 'monospace' }}
-                      itemStyle={{ color: '#fff' }}
-                    />
-                    <Area type="monotone" dataKey="calories" stroke="#fff" strokeWidth={1} fillOpacity={1} fill="url(#colorCal)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs text-gray-600 font-mono">Sin datos</div>
-              )}
-            </div>
-          </div>
+      <motion.section variants={itemVariants} className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+        <MealTimeline logs={logs} timezone={timezone} />
+        <DayRhythm logs={logs} goals={goals} totals={dailyTotals} timezone={timezone} />
+      </motion.section>
 
-          {/* Consistency Heatmap */}
-          <ConsistencyHeatmap history={monthlyHistory} goal={MACRO_GOALS.calories} />
-        </motion.div>
-      </div>
-    </motion.div>
+      <motion.div variants={itemVariants}>
+        <ConsistencyMatrix history={monthlyHistory} goals={goals} timezone={timezone} />
+      </motion.div>
+    </motion.main>
   );
 }
 
-function MacroCard({ title, icon, current, goal, unit, color }: any) {
-  const radius = 38;
-  const circumference = 2 * Math.PI * radius;
-  const progress = Math.min((current / goal) * 100, 100);
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
+function DailyNutritionSummary({ totals, goals }: { totals: MacroTotals; goals: Readonly<MacroTotals> }) {
+  const remaining = Math.max(0, goals.calories - totals.calories);
+  const calorieProgress = Math.min(1, totals.calories / goals.calories);
+  const [waterMessage, setWaterMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const addWater = (liters: number) => {
+    setWaterMessage("");
+    startTransition(async () => {
+      try {
+        await logWater(liters);
+        setWaterMessage(`Agregaste ${Math.round(liters * 1_000)} ml.`);
+      } catch {
+        setWaterMessage("No pude registrar el agua.");
+      }
+    });
+  };
 
   return (
-    <div className="bg-transparent border border-[#222] rounded-xl p-5 flex flex-col items-center relative overflow-hidden group">
-      <div className="absolute top-4 left-4">{icon}</div>
-      <div className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-4">{title}</div>
-      
-      <div className="relative w-24 h-24 flex items-center justify-center">
-        <svg className="transform -rotate-90 w-24 h-24">
-          <circle
-            className="stroke-[#111]"
-            strokeWidth="2"
-            fill="transparent"
-            r={radius}
-            cx="48"
-            cy="48"
-          />
-          <circle
-            className={color}
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="transparent"
-            r={radius}
-            cx="48"
-            cy="48"
-            style={{
-              strokeDasharray: circumference,
-              strokeDashoffset: strokeDashoffset,
-              transition: "stroke-dashoffset 1s ease-in-out"
-            }}
-          />
-        </svg>
-        <div className="absolute flex flex-col items-center">
-          <span className="text-lg font-mono text-gray-200">{Math.round(current)}</span>
-          <span className="text-[9px] text-gray-600 font-mono">{unit}</span>
+    <div className="os-surface rounded-[26px] p-5 md:p-7">
+      <div className="grid gap-7 md:grid-cols-[minmax(220px,0.72fr)_minmax(0,1.28fr)] md:items-end">
+        <div>
+          <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/28">
+            <Flame className="h-3.5 w-3.5 text-white/38" /> Balance de hoy
+          </div>
+          <div className="mt-6 flex items-end gap-3">
+            <span className="text-5xl font-medium tracking-[-0.065em] text-white/84 md:text-6xl">{Math.round(totals.calories)}</span>
+            <span className="pb-2 font-mono text-[10px] text-white/25">/ {goals.calories} kcal</span>
+          </div>
+          <p className="mt-3 text-xs text-white/35">
+            {totals.calories <= goals.calories ? `${Math.round(remaining)} kcal disponibles` : `${Math.round(totals.calories - goals.calories)} kcal sobre la meta`}
+          </p>
+          <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/[0.055]">
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: calorieProgress }}
+              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+              style={{ transformOrigin: "left" }}
+              className="h-full w-full rounded-full bg-white/60"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-4 border-t border-white/[0.055] pt-6 md:border-l md:border-t-0 md:pl-7 md:pt-0">
+          <MacroProgress label="Proteína" current={totals.protein} goal={goals.protein} />
+          <MacroProgress label="Carbohidratos" current={totals.carbs} goal={goals.carbs} />
+          <MacroProgress label="Grasa" current={totals.fat} goal={goals.fat} />
         </div>
       </div>
-      
-      <div className="mt-3 text-[10px] text-gray-600 font-mono">
-        / {goal} {unit}
+
+      <div className="mt-7 flex flex-col gap-4 border-t border-white/[0.055] pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.035] text-white/38">
+            <Droplets className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-xs text-white/58">{totals.water.toFixed(2)} L <span className="text-white/20">/ {goals.water} L</span></p>
+            <p aria-live="polite" className="mt-1 min-h-3 text-[9px] text-white/25">{isPending ? "Registrando hidratación…" : waterMessage || "Hidratación registrada hoy"}</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {[0.25, 0.5].map((liters) => (
+            <button
+              key={liters}
+              type="button"
+              onClick={() => addWater(liters)}
+              disabled={isPending}
+              className="h-9 rounded-xl border border-white/[0.07] px-3 font-mono text-[9px] text-white/35 transition hover:bg-white/[0.035] hover:text-white/65 active:scale-[0.98] disabled:opacity-30"
+            >
+              +{Math.round(liters * 1_000)} ml
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-function WaterCard({ current, goal, onAdd }: any) {
-  const radius = 38;
-  const circumference = 2 * Math.PI * radius;
-  const progress = Math.min((current / goal) * 100, 100);
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
-
+function MacroProgress({ label, current, goal }: { label: string; current: number; goal: number }) {
+  const progress = Math.min(1, current / goal);
+  const remaining = Math.max(0, goal - current);
   return (
-    <div className="bg-transparent border border-[#222] rounded-xl p-5 flex flex-col items-center relative overflow-hidden group">
-      <div className="absolute top-4 left-4"><Droplets className="w-3.5 h-3.5 text-blue-500/50" /></div>
-      <div className="text-[10px] text-blue-500/70 font-mono uppercase tracking-widest mb-4">Agua</div>
-      
-      <div className="relative w-24 h-24 flex items-center justify-center">
-        <svg className="transform -rotate-90 w-24 h-24">
-          <circle
-            className="stroke-[#111]"
-            strokeWidth="2"
-            fill="transparent"
-            r={radius}
-            cx="48"
-            cy="48"
-          />
-          <circle
-            className="stroke-blue-500"
-            strokeWidth="2"
-            strokeLinecap="round"
-            fill="transparent"
-            r={radius}
-            cx="48"
-            cy="48"
-            style={{
-              strokeDasharray: circumference,
-              strokeDashoffset: strokeDashoffset,
-              transition: "stroke-dashoffset 1s ease-in-out"
-            }}
-          />
-        </svg>
-        <div className="absolute flex flex-col items-center">
-          <span className="text-lg font-mono text-blue-400">{current.toFixed(1)}</span>
-          <span className="text-[9px] text-blue-500/50 font-mono">Litros</span>
-        </div>
+    <div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[10px] text-white/35">{label}</span>
+        <span className="font-mono text-[9px] text-white/28"><strong className="font-normal text-white/62">{Math.round(current)}g</strong> / {goal}g · {Math.round(remaining)}g restantes</span>
       </div>
-      
-      <div className="mt-4 flex gap-2 w-full">
-        <button onClick={() => onAdd(0.25)} className="flex-1 bg-[#111] hover:bg-[#222] text-gray-400 text-[10px] font-mono py-1.5 rounded transition-colors border border-[#222]">
-          + 250ml
-        </button>
-        <button onClick={() => onAdd(0.5)} className="flex-1 bg-[#111] hover:bg-[#222] text-gray-400 text-[10px] font-mono py-1.5 rounded transition-colors border border-[#222]">
-          + 500ml
-        </button>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.05]">
+        <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: progress }} style={{ transformOrigin: "left" }} className="h-full w-full rounded-full bg-white/45" />
       </div>
     </div>
   );
 }
 
-function ShadowAdvice({ current, goal }: any) {
-  const [advice, setAdvice] = useState<string | null>(null);
+function ShadowHealthPanel({ refreshKey }: { refreshKey: string }) {
+  const [insight, setInsight] = useState<ShadowNutritionInsight | null>(null);
+  const [error, setError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    let mounted = true;
-    getShadowMacroAdvice(current, goal).then((res) => {
-      if (mounted && res) setAdvice(res);
-    });
-    return () => { mounted = false; };
-  }, [current, goal]);
-
-  if (!advice) return null;
-
-  return (
-    <div className="bg-[#0a0a0a] border border-[#222] rounded-xl p-4 flex items-center gap-4 relative overflow-hidden group">
-      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#ff5500] to-purple-600 flex items-center justify-center shrink-0 blur-[2px] opacity-80" />
-      <div className="absolute left-4 w-8 h-8 flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" /></div>
-      <div className="flex flex-col">
-        <span className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-1">Shadow</span>
-        <span className="text-xs text-gray-300 font-mono">{advice}</span>
-      </div>
-    </div>
-  );
-}
-
-function ConsistencyHeatmap({ history, goal }: { history: Record<string, number>, goal: number }) {
-  if (!history) return null;
-  
-  const days = [];
-  const today = new Date();
-  
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const cals = history[dateStr] || 0;
-    
-    let color = 'bg-[#111] border-[#222]'; // Missed
-    if (cals > 0) {
-      if (cals >= goal * 0.9 && cals <= goal * 1.1) {
-        color = 'bg-white border-white'; // Perfect
-      } else if (cals > goal * 1.1) {
-        color = 'bg-[#ff5500] border-[#ff5500]'; // Over
-      } else {
-        color = 'bg-[#333] border-[#444]'; // Under but logged
-      }
-    }
-    
-    days.push(
-      <div key={dateStr} className={`w-3 h-3 rounded-sm border ${color}`} title={`${dateStr}: ${Math.round(cals)} kcal`} />
-    );
-  }
+    let cancelled = false;
+    setError(false);
+    getShadowMacroAdvice()
+      .then((result) => { if (!cancelled) setInsight(result); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, [refreshKey, retryCount]);
 
   return (
-    <div className="bg-transparent border border-[#222] rounded-xl p-5">
-      <h3 className="text-[10px] text-gray-500 font-mono uppercase tracking-widest mb-4">Consistencia (30 Días)</h3>
-      <div className="flex flex-wrap gap-1">
-        {days}
+    <div className="os-surface relative overflow-hidden rounded-[26px] p-5 md:p-6">
+      <div className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 opacity-35 blur-sm">
+        <ShadowOrb status={insight ? "idle" : "thinking"} hideBackground />
       </div>
-      <div className="flex items-center gap-3 mt-4 text-[9px] font-mono text-gray-500">
-        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-[1px] bg-[#111] border border-[#222]" /> Nada</div>
-        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-[1px] bg-[#333] border border-[#444]" /> Deficit</div>
-        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-[1px] bg-white border border-white" /> Perfecto</div>
-        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-[1px] bg-[#ff5500] border border-[#ff5500]" /> Exceso</div>
-      </div>
-    </div>
-  );
-}
-
-function FoodLogItem({ log }: { log: any }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-transparent border border-[#222] rounded-xl overflow-hidden transition-colors hover:border-[#444]"
-      onMouseEnter={() => setIsExpanded(true)}
-      onMouseLeave={() => setIsExpanded(false)}
-    >
-      <div className="p-4 flex flex-col md:flex-row justify-between md:items-center gap-4 cursor-default relative">
-        <div className="z-10">
-          <div className="text-sm text-gray-200 mb-1">{log.description}</div>
-          <div className="text-[10px] text-gray-500 font-mono flex items-center gap-2">
-            {new Date(log.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            {log.breakdown && log.breakdown.length > 0 && (
-              <span className="flex items-center gap-1 text-[#444]"><Terminal className="w-3 h-3" /> Desglose IA</span>
-            )}
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/28">
+          <ScanLine className="h-3.5 w-3.5 text-white/42" /> Shadow · Contexto cruzado
+        </div>
+        {error ? (
+          <div className="mt-8">
+            <p className="text-sm leading-relaxed text-white/45">No pude construir el contexto de salud en este momento.</p>
+            <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="mt-4 text-[10px] text-white/35 underline underline-offset-4 transition hover:text-white/65">Reintentar</button>
           </div>
+        ) : insight ? (
+          <>
+            <p className="mt-8 max-w-[34ch] text-[15px] leading-relaxed text-white/72">{insight.message}</p>
+            <div className="mt-7 divide-y divide-white/[0.055] border-y border-white/[0.055]">
+              <SignalRow icon={<Utensils className="h-3.5 w-3.5" />} label="Nutrición" value={`${Math.round(insight.nutrition.remainingProtein)}g proteína · ${Math.round(insight.nutrition.remainingCalories)} kcal pendientes`} />
+              <SignalRow icon={<Dumbbell className="h-3.5 w-3.5" />} label={insight.training.state === "completed" ? "Entrenamiento real" : "Entrenamiento previsto"} value={`${insight.training.label} · ${insight.training.detail}`} />
+              <SignalRow icon={<Brain className="h-3.5 w-3.5" />} label="Recuperación" value={`${insight.recovery.readiness}/100 · ${insight.recovery.detail}`} />
+            </div>
+          </>
+        ) : (
+          <div role="status" className="mt-8 space-y-4">
+            <div className="h-3 w-4/5 animate-pulse rounded-full bg-white/[0.06]" />
+            <div className="h-3 w-3/5 animate-pulse rounded-full bg-white/[0.04]" />
+            <div className="mt-7 h-24 animate-pulse rounded-2xl bg-white/[0.025]" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SignalRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex gap-3 py-3.5">
+      <div className="mt-0.5 text-white/28">{icon}</div>
+      <div className="min-w-0">
+        <p className="font-mono text-[8px] uppercase tracking-[0.14em] text-white/20">{label}</p>
+        <p className="mt-1 truncate text-[10px] text-white/42" title={value}>{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function MealTimeline({ logs, timezone }: { logs: FoodLogView[]; timezone: string }) {
+  const groups = useMemo(() => groupLogs(logs, timezone), [logs, timezone]);
+  return (
+    <div className="os-surface rounded-[26px] p-5 md:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Utensils className="h-3.5 w-3.5 text-white/35" />
+          <div><p className="text-sm font-medium text-white/68">Registro de hoy</p><p className="mt-1 text-[9px] text-white/24">Toca una comida para revisar o corregir el desglose</p></div>
         </div>
-        <div className="flex items-center gap-4 text-xs font-mono z-10">
-          <div className="text-gray-300">{Math.round(log.calories)} kcal</div>
-          <div className="text-gray-500">{Math.round(log.protein)}g P</div>
-          <div className="text-gray-500">{Math.round(log.carbs)}g C</div>
-          <div className="text-gray-500">{Math.round(log.fat)}g F</div>
-          {log.water > 0 && <div className="text-blue-400">{log.water.toFixed(1)}L H₂O</div>}
+        <span className="font-mono text-[9px] text-white/22">{logs.length} registros</span>
+      </div>
+
+      {logs.length === 0 ? (
+        <div className="mt-6 flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.07] text-center">
+          <Utensils className="h-5 w-5 text-white/18" />
+          <p className="mt-4 text-xs text-white/30">Todavía no hay comida registrada hoy.</p>
+          <p className="mt-1 text-[9px] text-white/18">La primera entrada aparecerá aquí después de confirmarla.</p>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-6">
+          {groups.map((group) => (
+            <div key={group.label}>
+              <div className="mb-2 flex items-center gap-3">
+                <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-white/22">{group.label}</span>
+                <div className="h-px flex-1 bg-white/[0.045]" />
+                <span className="font-mono text-[8px] text-white/18">{Math.round(group.logs.reduce((sum, log) => sum + log.calories, 0))} kcal</span>
+              </div>
+              <div className="divide-y divide-white/[0.05]">
+                {group.logs.map((log) => <FoodLogEntry key={log.id} log={log} timezone={timezone} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FoodLogEntry({ log, timezone }: { log: FoodLogView; timezone: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [description, setDescription] = useState(log.description);
+  const [items, setItems] = useState<FoodAnalysisItem[]>(log.breakdown.length > 0 ? log.breakdown : [fallbackItem(log)]);
+  const [water, setWater] = useState(log.water);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const editTotals = sumNutritionItems(items, water);
+
+  const startEditing = () => {
+    setDescription(log.description);
+    setItems(log.breakdown.length > 0 ? log.breakdown : [fallbackItem(log)]);
+    setWater(log.water);
+    setEditing(true);
+    setExpanded(true);
+    setMessage("");
+  };
+
+  const save = () => {
+    startTransition(async () => {
+      try {
+        await updateFoodLog({ id: log.id, description, items, water });
+        setEditing(false);
+        setMessage("Cambios guardados.");
+      } catch {
+        setMessage("No pude guardar los cambios.");
+      }
+    });
+  };
+
+  const duplicate = () => {
+    startTransition(async () => {
+      try { await duplicateFoodLog(log.id); setMessage("Comida duplicada."); }
+      catch { setMessage("No pude duplicarla."); }
+    });
+  };
+
+  const remove = () => {
+    if (!confirmDelete) { setConfirmDelete(true); return; }
+    startTransition(async () => {
+      try { await deleteFoodLog(log.id); }
+      catch { setMessage("No pude eliminar el registro."); setConfirmDelete(false); }
+    });
+  };
+
+  return (
+    <div className="py-1">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 py-3">
+        <span className="w-12 font-mono text-[9px] text-white/22">{formatTime(log.date, timezone)}</span>
+        <button type="button" onClick={() => setExpanded((value) => !value)} className="min-w-0 text-left active:scale-[0.99]">
+          <span className="block truncate text-[12px] text-white/60">{log.description}</span>
+          <span className="mt-1 block font-mono text-[8px] text-white/20">{log.breakdown.length} ingredientes · {log.water > 0 ? `${log.water.toFixed(2)} L agua` : "desglose disponible"}</span>
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-3 font-mono text-[9px] text-white/28 sm:flex"><span className="text-white/52">{Math.round(log.calories)} kcal</span><span>{Math.round(log.protein)}P</span><span>{Math.round(log.carbs)}C</span><span>{Math.round(log.fat)}G</span></div>
+          <button type="button" onClick={() => setExpanded((value) => !value)} aria-label={expanded ? "Cerrar desglose" : "Abrir desglose"} className="flex h-8 w-8 items-center justify-center rounded-lg text-white/24 transition hover:bg-white/[0.035] hover:text-white/55 active:scale-[0.98]"><ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} /></button>
         </div>
       </div>
-      
-      <AnimatePresence>
-        {isExpanded && log.breakdown && log.breakdown.length > 0 && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="border-t border-[#1a1a1a] bg-[#0a0a0a]/50"
-          >
-            <div className="p-4 font-mono text-[10px] text-gray-400">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-gray-600">
-                    <th className="font-normal pb-2">Ingrediente</th>
-                    <th className="font-normal pb-2">Kcal</th>
-                    <th className="font-normal pb-2">Pro</th>
-                    <th className="font-normal pb-2">Carb</th>
-                    <th className="font-normal pb-2">Grasa</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {log.breakdown.map((item: any, idx: number) => (
-                    <tr key={idx} className="border-b border-[#1a1a1a] last:border-0">
-                      <td className="py-1 text-gray-300">{item.name}</td>
-                      <td className="py-1">{item.calories}</td>
-                      <td className="py-1">{item.protein}</td>
-                      <td className="py-1">{item.carbs}</td>
-                      <td className="py-1">{item.fat}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="mb-3 rounded-2xl border border-white/[0.055] bg-white/[0.015] p-4">
+            {editing ? (
+              <MealEditor description={description} items={items} water={water} totals={editTotals} onDescriptionChange={setDescription} onItemsChange={setItems} onWaterChange={setWater} />
+            ) : (
+              <div className="overflow-x-auto custom-scrollbar">
+                <div className="min-w-[520px]">
+                  <div className="grid grid-cols-[minmax(170px,1fr)_90px_repeat(4,62px)] gap-2 px-2 pb-2 font-mono text-[7px] uppercase tracking-wider text-white/18"><span>Ingrediente</span><span>Porción</span><span>Kcal</span><span>Pro</span><span>Carb</span><span>Grasa</span></div>
+                  {items.map((item, index) => <div key={`${item.name}-${index}`} className="grid grid-cols-[minmax(170px,1fr)_90px_repeat(4,62px)] gap-2 border-t border-white/[0.045] px-2 py-2 text-[9px] text-white/32"><span className="truncate text-white/48">{item.name}</span><span>{item.quantity} {item.unit}</span><span>{Math.round(item.calories)}</span><span>{item.protein}</span><span>{item.carbs}</span><span>{item.fat}</span></div>)}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.05] pt-3 sm:flex-row sm:items-center sm:justify-between">
+              <p aria-live="polite" className="min-h-4 text-[9px] text-white/28">{isPending ? "Actualizando registro…" : message}</p>
+              <div className="flex flex-wrap gap-2">
+                {editing ? (
+                  <>
+                    <ActionButton icon={<X className="h-3.5 w-3.5" />} label="Cancelar" onClick={() => setEditing(false)} />
+                    <ActionButton primary icon={isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} label="Guardar" onClick={save} disabled={isPending || !description.trim()} />
+                  </>
+                ) : (
+                  <>
+                    <ActionButton icon={<Pencil className="h-3.5 w-3.5" />} label="Editar" onClick={startEditing} />
+                    <ActionButton icon={<Copy className="h-3.5 w-3.5" />} label="Duplicar" onClick={duplicate} disabled={isPending} />
+                    <ActionButton danger={confirmDelete} icon={<Trash2 className="h-3.5 w-3.5" />} label={confirmDelete ? "Confirmar borrado" : "Eliminar"} onClick={remove} disabled={isPending} />
+                  </>
+                )}
+              </div>
             </div>
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
+}
+
+function MealEditor({ description, items, water, totals, onDescriptionChange, onItemsChange, onWaterChange }: { description: string; items: FoodAnalysisItem[]; water: number; totals: MacroTotals; onDescriptionChange: (value: string) => void; onItemsChange: (items: FoodAnalysisItem[]) => void; onWaterChange: (value: number) => void }) {
+  const update = (index: number, field: keyof FoodAnalysisItem, value: string) => {
+    onItemsChange(items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      if (field === "name" || field === "unit") return { ...item, [field]: value };
+      const numericValue = Math.max(field === "quantity" ? 0.01 : 0, Number(value) || 0);
+      if (field !== "quantity") return { ...item, [field]: numericValue };
+      const ratio = item.quantity > 0 ? numericValue / item.quantity : 1;
+      return {
+        ...item,
+        quantity: numericValue,
+        calories: Math.round(item.calories * ratio),
+        protein: Math.round(item.protein * ratio * 10) / 10,
+        carbs: Math.round(item.carbs * ratio * 10) / 10,
+        fat: Math.round(item.fat * ratio * 10) / 10,
+      };
+    }));
+  };
+  return (
+    <div>
+      <input value={description} onChange={(event) => onDescriptionChange(event.target.value)} aria-label="Descripción de la comida" className="w-full border-b border-white/[0.06] bg-transparent pb-3 text-sm text-white/62 outline-none" />
+      <div className="mt-3 overflow-x-auto custom-scrollbar"><div className="min-w-[650px] space-y-2">{items.map((item, index) => <div key={`${item.name}-${index}`} className="grid grid-cols-[minmax(150px,1fr)_70px_90px_repeat(4,68px)_30px] gap-2"><EditorInput label="Ingrediente" value={item.name} onChange={(value) => update(index, "name", value)} /><EditorInput label="Cantidad" type="number" value={item.quantity} onChange={(value) => update(index, "quantity", value)} /><EditorInput label="Unidad" value={item.unit} onChange={(value) => update(index, "unit", value)} /><EditorInput label="Calorías" type="number" value={item.calories} onChange={(value) => update(index, "calories", value)} /><EditorInput label="Proteína" type="number" value={item.protein} onChange={(value) => update(index, "protein", value)} /><EditorInput label="Carbohidratos" type="number" value={item.carbs} onChange={(value) => update(index, "carbs", value)} /><EditorInput label="Grasa" type="number" value={item.fat} onChange={(value) => update(index, "fat", value)} /><button type="button" onClick={() => items.length > 1 && onItemsChange(items.filter((_, itemIndex) => itemIndex !== index))} disabled={items.length <= 1} aria-label={`Eliminar ${item.name}`} className="text-white/20 transition hover:text-white/55 disabled:opacity-10"><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-[9px] text-white/28"><button type="button" onClick={() => onItemsChange([...items, { name: "Ingrediente", quantity: 1, unit: "porción", calories: 0, protein: 0, carbs: 0, fat: 0 }])} className="flex items-center gap-2 transition hover:text-white/60"><Utensils className="h-3.5 w-3.5" />Agregar ingrediente</button><div className="flex items-center gap-4"><label>Agua <input type="number" min="0" step="0.05" value={water} onChange={(event) => onWaterChange(Math.max(0, Number(event.target.value) || 0))} className="ml-1 w-12 bg-transparent text-right text-white/55 outline-none" /> L</label><span className="font-mono text-white/48">{totals.calories} kcal · {totals.protein}P · {totals.carbs}C · {totals.fat}G</span></div></div>
+    </div>
+  );
+}
+
+function EditorInput({ label, value, type = "text", onChange }: { label: string; value: string | number; type?: "text" | "number"; onChange: (value: string) => void }) {
+  return <input aria-label={label} title={label} type={type} min={type === "number" ? 0 : undefined} step={type === "number" ? 0.1 : undefined} value={value} onChange={(event) => onChange(event.target.value)} className="h-8 min-w-0 rounded-lg border border-white/[0.055] bg-white/[0.018] px-2 text-[9px] text-white/45 outline-none focus:border-white/[0.14]" />;
+}
+
+function ActionButton({ icon, label, onClick, disabled = false, primary = false, danger = false }: { icon: React.ReactNode; label: string; onClick: () => void; disabled?: boolean; primary?: boolean; danger?: boolean }) {
+  return <button type="button" onClick={onClick} disabled={disabled} className={`flex h-9 items-center gap-2 rounded-xl px-3 text-[9px] transition active:scale-[0.98] disabled:opacity-25 ${primary ? "bg-[#eeeeee] text-[#111111] hover:bg-white" : danger ? "border border-white/20 bg-white/[0.07] text-white/70" : "border border-white/[0.06] text-white/32 hover:bg-white/[0.035] hover:text-white/62"}`}>{icon}{label}</button>;
+}
+
+function DayRhythm({ logs, goals, totals, timezone }: { logs: FoodLogView[]; goals: Readonly<MacroTotals>; totals: MacroTotals; timezone: string }) {
+  const calorieLogs = logs.filter((log) => log.calories > 0).toReversed();
+  const maxCalories = Math.max(1, ...calorieLogs.map((log) => log.calories));
+  return (
+    <div className="os-surface rounded-[26px] p-5 md:p-6">
+      <div className="flex items-center gap-2"><Activity className="h-3.5 w-3.5 text-white/35" /><div><p className="text-sm font-medium text-white/68">Ritmo del día</p><p className="mt-1 text-[9px] text-white/24">Distribución calórica por registro</p></div></div>
+      {calorieLogs.length > 0 ? (
+        <div className="mt-8 flex h-40 items-end gap-2 border-b border-white/[0.055] pb-5">
+          {calorieLogs.map((log) => {
+            const progress = Math.max(0.06, log.calories / maxCalories);
+            return <div key={log.id} className="group relative flex h-full min-w-0 flex-1 items-end"><div className="absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/[0.08] bg-[#0a0a0a] px-2 py-1 text-[8px] text-white/45 group-hover:block">{log.description} · {Math.round(log.calories)} kcal</div><motion.div initial={{ scaleY: 0 }} animate={{ scaleY: progress }} style={{ transformOrigin: "bottom" }} className="h-full w-full rounded-t-md bg-white/20 transition-colors group-hover:bg-white/40" /><span className="absolute -bottom-4 left-0 right-0 text-center font-mono text-[7px] text-white/18">{formatTime(log.date, timezone)}</span></div>;
+          })}
+        </div>
+      ) : <div className="mt-8 flex h-40 items-center justify-center rounded-2xl border border-dashed border-white/[0.06] text-[10px] text-white/22">Sin comidas para graficar</div>}
+      <div className="mt-7 space-y-3">
+        <RemainingLine label="Calorías" value={`${Math.max(0, Math.round(goals.calories - totals.calories))} kcal`} />
+        <RemainingLine label="Proteína" value={`${Math.max(0, Math.round(goals.protein - totals.protein))} g`} />
+        <RemainingLine label="Carbohidratos" value={`${Math.max(0, Math.round(goals.carbs - totals.carbs))} g`} />
+      </div>
+    </div>
+  );
+}
+
+function RemainingLine({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between border-t border-white/[0.045] pt-3 text-[10px]"><span className="text-white/25">{label} pendientes</span><span className="font-mono text-white/48">{value}</span></div>; }
+
+function ConsistencyMatrix({ history, goals, timezone }: { history: History; goals: Readonly<MacroTotals>; timezone: string }) {
+  const [range, setRange] = useState<30 | 90 | 365>(90);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [today] = useState(() => Date.now());
+  const days = useMemo(() => Array.from({ length: range }, (_, index) => {
+    const date = new Date(today - (range - index - 1) * 86_400_000);
+    const key = dateKeyInTimezone(date, timezone);
+    return { key, data: history[key] };
+  }), [history, range, timezone, today]);
+  const tracked = days.filter((day) => day.data);
+  const targetDays = tracked.filter((day) => day.data.calories >= goals.calories * 0.9 && day.data.calories <= goals.calories * 1.1).length;
+  const proteinDays = tracked.filter((day) => day.data.protein >= goals.protein * 0.9).length;
+  const selectedDay = selected ? history[selected] : undefined;
+
+  return (
+    <div className="os-surface rounded-[26px] p-5 md:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-sm font-medium text-white/68">Consistencia nutricional</p><p className="mt-1 text-[9px] text-white/24">La meta es registrar bien, no fabricar días perfectos</p></div>
+        <div className="flex rounded-xl border border-white/[0.06] bg-white/[0.018] p-1">{([30, 90, 365] as const).map((option) => <button key={option} type="button" onClick={() => { setRange(option); setSelected(null); }} className={`h-8 rounded-lg px-3 font-mono text-[8px] transition active:scale-[0.98] ${range === option ? "bg-white/[0.08] text-white/62" : "text-white/22 hover:text-white/50"}`}>{option === 365 ? "1 año" : `${option} días`}</button>)}</div>
+      </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-end">
+        <div className="overflow-x-auto pb-2 custom-scrollbar"><div className="grid w-max grid-flow-col grid-rows-7 gap-1.5">{days.map(({ key, data }) => <button key={key} type="button" title={data ? `${key}: ${Math.round(data.calories)} kcal` : `${key}: sin registro`} aria-label={data ? `${key}, ${Math.round(data.calories)} calorías` : `${key}, sin registro`} onClick={() => setSelected(key)} className={`h-3.5 w-3.5 rounded-[3px] border transition hover:scale-110 focus-visible:scale-110 ${heatClass(data, goals)}`} />)}</div></div>
+        <div className="grid grid-cols-3 divide-x divide-white/[0.055] rounded-2xl border border-white/[0.055] bg-white/[0.015] py-4">
+          <MatrixStat label="Registrados" value={`${tracked.length}/${range}`} />
+          <MatrixStat label="En calorías" value={`${targetDays}`} />
+          <MatrixStat label="Proteína" value={`${proteinDays}`} />
+        </div>
+      </div>
+      <AnimatePresence mode="wait">
+        {selected ? <motion.div key={selected} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-5 flex flex-col gap-2 border-t border-white/[0.05] pt-4 text-[9px] text-white/28 sm:flex-row sm:items-center sm:justify-between"><span>{selected}</span>{selectedDay ? <span className="font-mono text-white/45">{Math.round(selectedDay.calories)} kcal · {Math.round(selectedDay.protein)}P · {Math.round(selectedDay.carbs)}C · {Math.round(selectedDay.fat)}G</span> : <span>Sin registros ese día</span>}</motion.div> : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function MatrixStat({ label, value }: { label: string; value: string }) { return <div className="px-3 text-center"><p className="font-mono text-[7px] uppercase tracking-wider text-white/18">{label}</p><p className="mt-2 text-lg text-white/58">{value}</p></div>; }
+
+function heatClass(data: HistoryDay | undefined, goals: Readonly<MacroTotals>): string {
+  if (!data) return "border-white/[0.045] bg-white/[0.018]";
+  if (data.calories >= goals.calories * 0.9 && data.calories <= goals.calories * 1.1) return "border-white/55 bg-white/65";
+  if (data.calories > goals.calories * 1.1) return "border-white/25 bg-white/35";
+  return "border-white/15 bg-white/15";
+}
+
+function fallbackItem(log: FoodLogView): FoodAnalysisItem { return { name: log.description, quantity: 1, unit: "porción", calories: log.calories, protein: log.protein, carbs: log.carbs, fat: log.fat }; }
+
+function formatTime(date: string, timezone: string): string { return new Intl.DateTimeFormat("es-MX", { timeZone: timezone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(date)); }
+
+function dateKeyInTimezone(date: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function groupLogs(logs: FoodLogView[], timezone: string) {
+  const groups = new Map<string, FoodLogView[]>();
+  for (const log of logs) {
+    const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour: "2-digit", hour12: false }).format(new Date(log.date)));
+    const label = log.calories === 0 && log.water > 0 ? "Hidratación" : hour < 11 ? "Mañana" : hour < 17 ? "Mediodía" : hour < 21 ? "Tarde" : "Noche";
+    const group = groups.get(label) ?? [];
+    group.push(log);
+    groups.set(label, group);
+  }
+  const order = ["Mañana", "Mediodía", "Tarde", "Noche", "Hidratación"];
+  return order.flatMap((label) => groups.has(label) ? [{ label, logs: groups.get(label)! }] : []);
 }

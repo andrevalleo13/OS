@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { SessionHistory, PersonalRecord } from "@/components/gym/MuscleData";
+import { dateKey } from "@/lib/dates";
+import { serverConfig } from "@/lib/config";
 
 function getRelativeTime(date: Date) {
   const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
@@ -118,7 +120,7 @@ export async function getGymData() {
 
     const heatmap: Record<string, number> = {};
     for (const session of heatmapLogs) {
-      const dateStr = session.date.toISOString().split('T')[0];
+      const dateStr = dateKey(session.date, serverConfig.timezone);
       heatmap[dateStr] = (heatmap[dateStr] || 0) + 1;
     }
 
@@ -144,6 +146,9 @@ export async function logSteps(steps: number) {
         date: new Date()
       }
     });
+    revalidatePath('/');
+    revalidatePath('/biometrics');
+    revalidatePath('/gym');
     return { success: true };
   } catch (error) {
     console.error("Error logging steps:", error);
@@ -160,6 +165,7 @@ export async function logWeight(weight: number) {
       }
     });
     revalidatePath('/gym');
+    revalidatePath('/');
     return { success: true };
   } catch (error) {
     console.error("Error logging weight:", error);
@@ -193,6 +199,7 @@ export async function saveWorkoutSession(
       }
     });
     revalidatePath('/gym');
+    revalidatePath('/');
     return { success: true };
   } catch (error) {
     console.error("Error saving workout session:", error);
