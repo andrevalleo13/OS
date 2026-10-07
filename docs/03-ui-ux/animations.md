@@ -11,3 +11,9 @@ El "Grid Mutante" (Bento Grid) de ValleOS no utiliza CSS Grid clásico para camb
 El ecosistema 3D del módulo Gym utiliza un pipeline de control de cámara mixto.
 - En lugar de forzar a React a renderizar cada frame de una animación de zoom en el modelo 3D del cuerpo humano (lo cual hundiría el rendimiento), pasamos referencias limpias (`useRef`) del la cámara WebGL a GSAP.
 - GSAP ejecuta interpolaciones de curvas Bézier para mover fluidamente la cámara a partes específicas del cuerpo (ej. Hombros) sin bloquear el hilo principal de React.
+
+## Shadow y el dashboard
+- **Personaje (`ShadowOrb`)**: Framer Motion para ojos (resortes) y gestos de cuerpo; un único `requestAnimationFrame` por cara mueve el mármol y la respiración escribiendo `MotionValue`s, sin renders de React. Los colores se interpolan en CSS con `@property`.
+- **Entrada del dashboard**: GSAP coordina la línea de tiempo del saludo (cara → palabras → líneas → input) y Framer Motion escalona las tarjetas con `introOrder`. Cada librería anima elementos distintos; nunca las mismas propiedades. Solo una vez por sesión.
+- **Respuestas de Shadow**: GSAP revela los bloques de Markdown con desenfoque en cascada y limpia sus estilos al terminar (`clearProps`).
+- Detalle completo en [shadow_character.md](./shadow_character.md).

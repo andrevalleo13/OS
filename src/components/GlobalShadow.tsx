@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import ShadowOrb from "./ShadowOrb";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRightIcon } from "@radix-ui/react-icons";
+import { ArrowUp } from "lucide-react";
 import { useState, useRef } from "react";
 import { useShadowVoice } from "@/components/shadow/ShadowVoiceProvider";
 import type { ShadowStatus } from "@/components/shadow/types";
@@ -21,7 +21,7 @@ export default function GlobalShadow() {
   if (pathname === '/shadow') return null;
 
   const isExpanded = isHovered || isFocused || inputValue.length > 0;
-  const orbStatus: ShadowStatus = voice.phase === "listening" ? "listening" : voice.phase === "processing" ? "thinking" : voice.phase === "speaking" ? "speaking" : inputValue ? "thinking" : "idle";
+  const orbStatus: ShadowStatus = voice.phase === "listening" ? "listening" : voice.phase === "processing" ? "thinking" : voice.phase === "speaking" ? "speaking" : inputValue ? "listening" : "idle";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +56,7 @@ export default function GlobalShadow() {
           onSubmit={handleSubmit}
           className="overflow-hidden relative z-0 h-14"
         >
-          <div className="bg-[#111]/90 backdrop-blur-xl border border-[#222] border-r-0 rounded-l-full h-full pl-6 pr-8 flex items-center shadow-2xl">
+          <div className="bg-[#0a0a0a]/95 backdrop-blur-3xl border border-white/10 border-r-0 rounded-l-full h-full pl-6 pr-8 flex items-center shadow-2xl">
             <input
               ref={inputRef}
               type="text"
@@ -64,7 +64,8 @@ export default function GlobalShadow() {
               onChange={(e) => setInputValue(e.target.value)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
-              placeholder="Ask Shadow..."
+              placeholder="Pregúntale a Shadow…"
+              aria-label="Mensaje para Shadow"
               className="os-message-input w-full border-none bg-transparent text-sm text-[#ededed] outline-none placeholder:text-[#555]"
             />
             <AnimatePresence>
@@ -74,9 +75,10 @@ export default function GlobalShadow() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   type="submit"
-                  className="w-8 h-8 rounded-full bg-[#333] text-white flex items-center justify-center hover:bg-[#555] transition-colors ml-2 shrink-0"
+                  aria-label="Enviar a Shadow"
+                  className="ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#111111] transition-colors hover:bg-white/90"
                 >
-                  <ChevronRightIcon className="w-4 h-4" />
+                  <ArrowUp className="h-4 w-4" />
                 </motion.button>
               )}
             </AnimatePresence>
@@ -85,6 +87,15 @@ export default function GlobalShadow() {
 
         {/* The Mini Orb (Trigger) */}
         <motion.div 
+          role="button"
+          tabIndex={0}
+          aria-label="Abrir Shadow"
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              router.push("/shadow");
+            }
+          }}
           className="relative w-16 h-16 flex items-center justify-center cursor-pointer z-10 shrink-0"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}

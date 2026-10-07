@@ -4,7 +4,7 @@ El Dashboard de ValleOS está diseñado para sentirse como una terminal de alta 
 
 ## Principios Centrales
 1. **El Contenido es la Interfaz**: Los datos deben hablar por sí mismos. No envuelvas los datos en contenedores voluminosos o encabezados gigantes.
-2. **Dominancia Monocromática**: El 95% de la interfaz de usuario debe estar en escala de grises. Usa color ÚNICAMENTE para un significado semántico explícito (ej. `#ff5500` para la marca de ValleOS, verde para flujo de caja positivo, degradados sutiles para biometría).
+2. **Dominancia Monocromática**: El 95% de la interfaz de usuario debe estar en escala de grises. El personaje Shadow es la excepción viva: sus colores por estado viven solo en `src/components/shadow/face/palette.ts` (ver [shadow_character.md](./shadow_character.md)). Usa color ÚNICAMENTE para un significado semántico explícito (ej. `#ff5500` para la marca de ValleOS, verde para flujo de caja positivo, degradados sutiles para biometría).
 3. **Escala Tipográfica**:
    - `text-[9px]`/`text-[10px]`: Datos secundarios, etiquetas, estados inactivos.
    - `text-[11px]`/`text-xs`: Etiquetas principales, elementos de lista.
@@ -21,6 +21,6 @@ El Dashboard de ValleOS está diseñado para sentirse como una terminal de alta 
 - **Micro-interacciones**: Todo lo interactivo debe tener un estado de hover (generalmente `text-white` o `bg-[#1a1a1a]`) y un estado de clic (`active:scale-95`).
 
 ## Iconografía
-- Debes usar `lucide-react`.
+- Debes usar `lucide-react` (Radix Icons fue eliminado del proyecto).
 - El grosor de trazo por defecto es 2px, pero reduce la escala para íconos pequeños si es necesario.
 - Los tamaños de los íconos rara vez deben exceder `w-5 h-5` a menos que sean decorativos.
