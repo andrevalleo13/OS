@@ -13,6 +13,8 @@ type Props = {
   createdAt?: string;
   /** Desactiva el revelado (p. ej. con animaciones en pausa). */
   reveal?: boolean;
+  /** El texto sigue llegando: muestra el cursor y omite el revelado. */
+  streaming?: boolean;
   className?: string;
 };
 
@@ -28,12 +30,13 @@ function motionAllowed() {
  * cascada: una línea de tiempo GSAP coordinada sobre los párrafos y elementos
  * de lista, que se limpia sola al terminar para no dejar estilos colgados.
  */
-export const ShadowResponse = memo(function ShadowResponse({ text, createdAt, reveal = true, className = "" }: Props) {
+export const ShadowResponse = memo(function ShadowResponse({ text, createdAt, reveal = true, streaming = false, className = "" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const node = ref.current;
-    if (!node || !reveal || !createdAt) return;
+    // Una respuesta que llegó en vivo ya se "reveló" mientras se escribía.
+    if (!node || !reveal || !createdAt || streaming) return;
     if (Date.now() - new Date(createdAt).getTime() > FRESH_MS || !motionAllowed()) return;
     const targets = Array.from(node.children).flatMap((block) =>
       block.matches("ul, ol") ? Array.from(block.children) : [block],
@@ -55,10 +58,12 @@ export const ShadowResponse = memo(function ShadowResponse({ text, createdAt, re
       );
     }, node);
     return () => ctx.revert();
+    // Solo al montar: el revelado no debe repetirse cuando termina el streaming.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createdAt, reveal]);
 
   return (
-    <div ref={ref} className={`${PROSE} ${className}`}>
+    <div ref={ref} className={`${PROSE} ${streaming ? "shadow-streaming" : ""} ${className}`}>
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
   );

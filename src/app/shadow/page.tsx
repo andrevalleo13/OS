@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { askShadow, getShadowConversation, importShadowConversation } from "@/app/actions/shadow";
+import { getShadowConversation, importShadowConversation } from "@/app/actions/shadow";
+import { streamShadow } from "@/components/shadow/ai/streamShadow";
 import { approveShadowAction } from "@/app/actions/shadow-actions";
 import { ShadowComposer } from "@/components/shadow/ShadowComposer";
 import { ShadowContextRail } from "@/components/shadow/ShadowContextRail";
@@ -121,7 +122,8 @@ export default function ShadowPage() {
   }, []);
 
   const setConversationStatus = useCallback((key: string, nextStatus: ShadowStatus) => {
-    setStatusByConversation((current) => ({ ...current, [key]: nextStatus }));
+    // Se llama en cada fragmento del streaming: sin cambio real, sin render.
+    setStatusByConversation((current) => current[key] === nextStatus ? current : { ...current, [key]: nextStatus });
   }, []);
 
   /**
@@ -216,7 +218,7 @@ export default function ShadowPage() {
 
   useEffect(() => {
     if (!hydrated) return;
-    const serializable = Object.fromEntries(Object.entries(messagesByConversation).map(([key, messages]) => [key, messages.slice(-80).map(({ id, sender, text, mood, widget, createdAt }) => ({ id, sender, text, mood, widget, createdAt }))]));
+    const serializable = Object.fromEntries(Object.entries(messagesByConversation).map(([key, messages]) => [key, messages.filter((message) => !message.streaming).slice(-80).map(({ id, sender, text, mood, widget, createdAt }) => ({ id, sender, text, mood, widget, createdAt }))]));
     window.localStorage.setItem(MESSAGE_CACHE_KEY, JSON.stringify(serializable));
   }, [messagesByConversation, hydrated]);
 
@@ -292,29 +294,67 @@ export default function ShadowPage() {
     });
     uiAudio.playSend();
 
+    // La respuesta nace como un mensaje vivo: los pasos reales y el texto se
+    // escriben sobre él mientras llegan, y al final se sella con el resultado.
+    const responseId = makeId("shdw");
+    let responseStarted = false;
+    let receivedText = false;
+    const patchResponse = (update: (message: ShadowMessage) => ShadowMessage) =>
+      setMessagesByConversation((current) => ({
+        ...current,
+        [conversationKey]: (current[conversationKey] ?? []).map((message) => message.id === responseId ? update(message) : message),
+      }));
+    const ensureResponse = () => {
+      if (responseStarted) return;
+      responseStarted = true;
+      appendMessage(conversationKey, { id: responseId, sender: "SHDW", text: "", streaming: true, steps: [], createdAt: new Date().toISOString() });
+    };
+
     try {
-      const result = await askShadow({ message: command, conversationKey, channel: "dashboard" });
-      const response: ShadowMessage = {
-        id: makeId("shdw"),
-        sender: "SHDW",
+      const result = await streamShadow({ message: command, conversationKey, channel: "dashboard" }, {
+        onStep: (step) => {
+          ensureResponse();
+          patchResponse((message) => ({ ...message, steps: [...(message.steps ?? []), { ...step, status: "running" }] }));
+          setConversationStatus(conversationKey, "thinking");
+        },
+        onStepDone: (id, ok) => patchResponse((message) => ({
+          ...message,
+          steps: message.steps?.map((step) => step.id === id ? { ...step, status: ok ? "done" : "failed" } : step),
+        })),
+        onText: (delta) => {
+          ensureResponse();
+          if (!receivedText) uiAudio.playReceive();
+          receivedText = true;
+          patchResponse((message) => ({ ...message, text: message.text + delta }));
+          setConversationStatus(conversationKey, "speaking");
+        },
+        onReset: () => patchResponse((message) => ({ ...message, text: "" })),
+      });
+      ensureResponse();
+      const finishedAt = new Date().toISOString();
+      patchResponse((message) => ({
+        ...message,
         text: result.text,
         mood: result.mood,
         widget: result.widget,
         pendingAction: result.pendingAction,
         sources: result.sources,
-        createdAt: new Date().toISOString(),
-      };
-      appendMessage(conversationKey, response);
-      setConversationStatus(conversationKey, "speaking");
-      updateConversation(conversationKey, { preview: result.text, updatedAt: response.createdAt! });
-      uiAudio.playReceive();
+        streaming: false,
+        steps: undefined,
+      }));
+      updateConversation(conversationKey, { preview: result.text, updatedAt: finishedAt });
+      if (!receivedText) uiAudio.playReceive();
       if (result.widget && result.widget !== "none") {
         const widgetTimer = window.setTimeout(() => uiAudio.playWidgetSpawn(), 420);
         timersRef.current.add(widgetTimer);
       }
-      settleConversation(conversationKey, result.mood, Math.min(2600, Math.max(900, result.text.split(/\s+/).length * 55)));
+      // El texto ya se "dijo" mientras llegaba: el cierre es breve.
+      setConversationStatus(conversationKey, "speaking");
+      settleConversation(conversationKey, result.mood, receivedText ? 600 : Math.min(2600, Math.max(900, result.text.split(/\s+/).length * 55)));
     } catch {
-      appendMessage(conversationKey, { id: makeId("error"), sender: "SHDW", text: "No pude completar la solicitud. El mensaje permanece en este hilo para que puedas reintentarlo.", mood: "urgent", createdAt: new Date().toISOString() });
+      const failure = "No pude completar la solicitud. El mensaje permanece en este hilo para que puedas reintentarlo.";
+      if (responseStarted) patchResponse((message) => ({ ...message, text: failure, mood: "urgent", streaming: false, steps: undefined }));
+      else appendMessage(conversationKey, { id: responseId, sender: "SHDW", text: failure, mood: "urgent", createdAt: new Date().toISOString() });
       setConversationStatus(conversationKey, "error");
       settleConversation(conversationKey, undefined, 2_600);
     }

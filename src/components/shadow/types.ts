@@ -1,4 +1,5 @@
 import type { PendingShadowAction } from "@/features/shadow/file-actions";
+import type { ShadowStep } from "@/features/shadow/protocol";
 import type { ShadowSource } from "@/features/shadow/sources";
 
 /**
@@ -15,6 +16,10 @@ export type ShadowMessage = {
   widget?: string;
   pendingAction?: PendingShadowAction;
   sources?: ShadowSource[];
+  /** La respuesta sigue llegando. */
+  streaming?: boolean;
+  /** Pasos reales que Shadow está ejecutando para esta respuesta. */
+  steps?: LiveShadowStep[];
   createdAt?: string;
   failed?: boolean;
 };
@@ -30,3 +35,5 @@ export type ShadowConversationMeta = {
 };
 
 export type ComposerMode = "ask" | "plan" | "act";
+
+export type LiveShadowStep = ShadowStep & { status: "running" | "done" | "failed" };

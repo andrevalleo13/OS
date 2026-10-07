@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeSources, sourceFromToolUse, sourcesFromRoute } from "./sources";
+import { contextStepLabel, mergeSources, sourceFromToolUse, sourcesFromRoute, toolStepLabel } from "./sources";
 
 describe("shadow sources", () => {
   it("describe dominios y memoria consultados", () => {
@@ -27,5 +27,20 @@ describe("shadow sources", () => {
     expect(merged).toHaveLength(8);
     expect(merged[0].id).toBe("a0");
     expect(merged.filter((source) => source.id === "a0")).toHaveLength(1);
+  });
+});
+
+describe("shadow step labels", () => {
+  it("describe pasos reales y calla la memoria silenciosa", () => {
+    expect(toolStepLabel("read_obsidian_note", { filename: "Personas/Diego.md" })).toBe("Leyendo Diego");
+    expect(toolStepLabel("search_web", { query: "clima" })).toBe("Buscando en la web: “clima”");
+    expect(toolStepLabel("add_expense", { amount: 1 })).toBe("Registrando gasto");
+    expect(toolStepLabel("remember_personal_context", {})).toBeNull();
+    expect(toolStepLabel("algo_nuevo", {})).toBe("Usando herramientas");
+  });
+
+  it("nombra el contexto que se carga", () => {
+    expect(contextStepLabel({ domains: ["finance"], needsObsidian: true })).toBe("Leyendo tu contexto: Finanzas, memoria personal");
+    expect(contextStepLabel({ domains: [], needsObsidian: false })).toBe("Leyendo tu contexto");
   });
 });

@@ -1,6 +1,6 @@
 # ValleOS Dashboard 🌐
 
-ValleOS Dashboard es la interfaz central del sistema operativo personal `ValleOS`, potenciado por **Shadow**, una Inteligencia Artificial Autónoma construida sobre la API de Anthropic (Claude 3.5 Haiku).
+ValleOS Dashboard es la interfaz central del sistema operativo personal `ValleOS`, potenciado por **Shadow**, una Inteligencia Artificial Autónoma construida sobre la API de Anthropic (Claude Haiku 5.5 por defecto, configurable con `ANTHROPIC_MODEL`).
 
 ## Arquitectura y Funcionalidades Principales
 

@@ -7,7 +7,8 @@ import { ArrowUp, ArrowUpRight, Check, ChevronRight, Mic, MicOff, X } from "luci
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { approveShadowAction } from "@/app/actions/shadow-actions";
-import { askShadow, getShadowConversation } from "@/app/actions/shadow";
+import { getShadowConversation } from "@/app/actions/shadow";
+import { streamShadow } from "@/components/shadow/ai/streamShadow";
 import ShadowOrb from "@/components/ShadowOrb";
 import { ShadowLoader } from "@/components/shadow/ai/ShadowLoader";
 import { ShadowSuggestions } from "@/components/shadow/ai/ShadowSuggestions";
@@ -36,6 +37,11 @@ const SUGGESTIONS = [
   { id: "estado", label: "Resume mi estado y dime qué atacar ahora" },
 ];
 
+/** La línea del saludo es texto plano: sin marcas de Markdown a la vista. */
+function plainText(value: string | undefined): string | undefined {
+  return value?.replace(/```[\s\S]*?```/g, " ").replace(/[*_`#>]+/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/\s+/g, " ").trim();
+}
+
 const TONE_DOT: Record<BriefingItem["tone"], string> = {
   focus: "bg-white/70",
   care: "bg-white/35 ring-2 ring-white/10",
@@ -49,6 +55,8 @@ export default function ShadowWidget({ initialData }: { initialData: DashboardIn
   const [dateLabel, setDateLabel] = useState("Centro de mando");
   const [greeting, setGreeting] = useState("Hola");
   const [briefing, setBriefing] = useState<BriefingItem[] | null>(null);
+  /** El paso real que Shadow está ejecutando ahora mismo. */
+  const [liveStep, setLiveStep] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   const timersRef = useRef(new Set<number>());
@@ -138,18 +146,43 @@ export default function ShadowWidget({ initialData }: { initialData: DashboardIn
     setInputValue("");
     setStatus("thinking");
     setMessages((current) => [...current, { sender: "USR" as const, text: command }].slice(-10));
+    // El estado "ya empezó" vive fuera de los updaters: React puede llamarlos
+    // dos veces y deben ser puros.
+    let started = false;
+    const writeLive = (update: (text: string) => string) => {
+      if (!started) {
+        started = true;
+        setMessages((current) => [...current, { sender: "SHDW" as const, text: update("") }].slice(-10));
+        return;
+      }
+      setMessages((current) => {
+        const last = current[current.length - 1];
+        return [...current.slice(0, -1), { ...last, text: update(last.text) }];
+      });
+    };
     try {
-      const result = await askShadow({ message: command, conversationKey: CONVERSATION_KEY, channel: "dashboard" });
-      setMessages((current) => [...current, {
-        sender: "SHDW" as const,
-        text: result.text,
-        mood: result.mood,
-        pendingAction: result.pendingAction,
-      }].slice(-10));
+      const result = await streamShadow({ message: command, conversationKey: CONVERSATION_KEY, channel: "dashboard" }, {
+        onStep: (step) => {
+          setLiveStep(step.label);
+          setStatus("thinking");
+        },
+        onText: (delta) => {
+          setLiveStep(null);
+          setStatus("speaking");
+          writeLive((text) => text + delta);
+        },
+        onReset: () => {
+          if (started) writeLive(() => "");
+        },
+      });
+      setLiveStep(null);
+      const final = { sender: "SHDW" as const, text: result.text, mood: result.mood, pendingAction: result.pendingAction };
+      setMessages((current) => (started ? [...current.slice(0, -1), final] : [...current, final]).slice(-10));
       router.refresh();
       setStatus("speaking");
-      settle(result.mood, Math.min(2_200, Math.max(900, result.text.split(/\s+/).length * 45)));
+      settle(result.mood, 700);
     } catch {
+      setLiveStep(null);
       setMessages((current) => [...current, { sender: "SHDW" as const, text: "No pude completar la solicitud.", mood: "urgent" }].slice(-10));
       setStatus("error");
       settle(undefined, 2_600);
@@ -176,8 +209,8 @@ export default function ShadowWidget({ initialData }: { initialData: DashboardIn
   const shadowLine =
     visibleStatus === "listening" ? (inputValue ? "Te sigo…" : "Te escucho…")
       : visibleStatus === "thinking" ? null
-        : visibleStatus === "speaking" ? voice.lastResponse || lastShadowMessage?.text
-          : lastShadowMessage?.text || "Dime qué quieres lograr; yo conecto las piezas.";
+        : visibleStatus === "speaking" ? plainText(voice.lastResponse || lastShadowMessage?.text)
+          : plainText(lastShadowMessage?.text) || "Dime qué quieres lograr; yo conecto las piezas.";
 
   return (
     <WidgetCard
@@ -231,11 +264,11 @@ export default function ShadowWidget({ initialData }: { initialData: DashboardIn
                   <AnimatePresence mode="wait" initial={false}>
                     {shadowLine === null ? (
                       <motion.div key="thinking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                        <ShadowLoader variant="dots" label="Conectando las piezas" showElapsed />
+                        <ShadowLoader variant="dots" label={liveStep ?? "Conectando las piezas"} showElapsed />
                       </motion.div>
                     ) : (
                       <motion.p
-                        key={shadowLine}
+                        key={`${visibleStatus}-${messages.length}`}
                         initial={{ opacity: 0, y: 4, filter: "blur(4px)" }}
                         animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                         exit={{ opacity: 0, y: -4, filter: "blur(4px)" }}

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
@@ -18,6 +18,7 @@ import { ShadowConversation } from "@/components/shadow/ai/ShadowConversation";
 import { ShadowLoader } from "@/components/shadow/ai/ShadowLoader";
 import { ShadowResponse } from "@/components/shadow/ai/ShadowResponse";
 import { ShadowSources } from "@/components/shadow/ai/ShadowSources";
+import { ShadowSteps } from "@/components/shadow/ai/ShadowSteps";
 import { ShadowSuggestions } from "@/components/shadow/ai/ShadowSuggestions";
 import { STATUS_LABEL } from "@/components/shadow/face/palette";
 import { ShadowWidgetRenderer } from "@/components/widgets/ShadowWidgetRenderer";
@@ -144,16 +145,21 @@ function MessageTimeline({ logs, status, motionPaused, onActionDecision }: { log
                 </div>
               ) : (
                 <div className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 sm:grid-cols-[32px_minmax(0,1fr)] sm:gap-4">
-                  <div className="mt-0.5 h-7 w-7 sm:h-8 sm:w-8"><ShadowOrb mood={message.mood} hideBackground paused /></div>
+                  <div className="mt-0.5 h-7 w-7 sm:h-8 sm:w-8">
+                    {message.streaming
+                      ? <ShadowOrb status={status} hideBackground paused={motionPaused} gaze={false} />
+                      : <ShadowOrb mood={message.mood} hideBackground paused />}
+                  </div>
                   <div className="min-w-0">
                     <div className="mb-2 flex items-center gap-2"><span className="text-[10px] font-medium text-white/60">Shadow</span>{message.createdAt ? <time className="font-mono text-[8px] text-white/18">{new Date(message.createdAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</time> : null}</div>
-                    <ShadowResponse text={message.text} createdAt={message.createdAt} reveal={!motionPaused} />
-                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                    {message.streaming && message.steps?.length ? <ShadowSteps steps={message.steps} className={message.text ? "mb-3" : ""} /> : null}
+                    {message.text ? <ShadowResponse text={message.text} createdAt={message.createdAt} reveal={!motionPaused} streaming={message.streaming} /> : null}
+                    {message.streaming ? null : <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
                       {message.sources?.length ? <ShadowSources sources={message.sources} /> : null}
                       <button onClick={() => void copyMessage(message)} className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[8px] text-white/0 transition hover:bg-white/[0.035] hover:text-white/45 group-hover/message:text-white/20 focus-visible:text-white/45" aria-label="Copiar respuesta">
                         {copiedId === message.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}{copiedId === message.id ? "Copiado" : "Copiar"}
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 </div>
               )}
@@ -165,29 +171,19 @@ function MessageTimeline({ logs, status, motionPaused, onActionDecision }: { log
             </motion.article>
           );
         })}
-        <AnimatePresence>{status === "thinking" ? <ThinkingTrace motionPaused={motionPaused} /> : null}</AnimatePresence>
+        {/* Antes del primer evento real; después los pasos viven en el mensaje. */}
+        <AnimatePresence>{status === "thinking" && !logs.at(-1)?.streaming ? <ThinkingTrace motionPaused={motionPaused} /> : null}</AnimatePresence>
       </div>
     </ShadowConversation>
   );
 }
 
-const THINKING_STEPS = ["Interpretando", "Leyendo tu contexto", "Construyendo respuesta"];
-
 function ThinkingTrace({ motionPaused }: { motionPaused: boolean }) {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const interval = window.setInterval(() => setStep((current) => Math.min(current + 1, THINKING_STEPS.length - 1)), 1400);
-    return () => window.clearInterval(interval);
-  }, []);
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 sm:grid-cols-[32px_minmax(0,1fr)] sm:gap-4">
       <div className="h-7 w-7 sm:h-8 sm:w-8"><ShadowOrb status="thinking" hideBackground paused={motionPaused} gaze={false} /></div>
       <div className="flex flex-col gap-2.5 pt-1.5">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.span key={step} initial={{ opacity: 0, y: 4, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -4, filter: "blur(4px)" }} transition={{ duration: 0.22 }}>
-            <ShadowLoader variant="dots" label={THINKING_STEPS[step]} showElapsed />
-          </motion.span>
-        </AnimatePresence>
+        <ShadowLoader variant="dots" label="Entendiendo" showElapsed />
         <ShadowLoader variant="bar" />
       </div>
     </motion.div>

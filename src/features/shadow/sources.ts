@@ -113,3 +113,49 @@ export function mergeSources(...lists: Array<ShadowSource[] | undefined>): Shado
   }
   return merged;
 }
+
+const STEP_LABEL: Record<string, string> = {
+  add_expense: "Registrando gasto",
+  log_food: "Registrando comida",
+  close_daily_log: "Cerrando el día",
+  list_directory: "Revisando carpeta",
+  create_directory: "Creando carpeta",
+  move_path: "Moviendo archivo",
+  add_calendar_event: "Preparando evento",
+  draft_email: "Preparando correo",
+  send_email: "Preparando correo",
+  send_whatsapp_message: "Preparando WhatsApp",
+};
+
+/**
+ * Lo que la interfaz muestra mientras corre una herramienta. `null` para el
+ * mantenimiento silencioso de memoria: nunca se anuncia.
+ */
+export function toolStepLabel(name: string, input: unknown): string | null {
+  if (SILENT_TOOLS.has(name)) return null;
+  const fields = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  if (name === "search_obsidian") {
+    const query = text(fields.query, 60);
+    return query ? `Buscando en tu bóveda: “${query}”` : "Buscando en tu bóveda";
+  }
+  if (name === "read_obsidian_note") {
+    const filename = text(fields.filename, 500);
+    return filename ? `Leyendo ${noteTitle(filename)}` : "Leyendo una nota";
+  }
+  if (name === "search_web") {
+    const query = text(fields.query, 60);
+    return query ? `Buscando en la web: “${query}”` : "Buscando en la web";
+  }
+  if (name === "read_url") {
+    const url = text(fields.url, 2_000);
+    return url ? `Leyendo ${hostOf(url)}` : "Leyendo una página";
+  }
+  return STEP_LABEL[name] ?? "Usando herramientas";
+}
+
+/** Paso inicial real: qué contexto de ValleOS se está cargando. */
+export function contextStepLabel(route: Pick<ShadowContextRoute, "domains" | "needsObsidian">): string {
+  const parts = route.domains.map((domain) => DOMAIN_LABEL[domain]);
+  if (route.needsObsidian) parts.push("memoria personal");
+  return parts.length ? `Leyendo tu contexto: ${parts.join(", ")}` : "Leyendo tu contexto";
+}

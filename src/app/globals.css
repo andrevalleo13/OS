@@ -148,3 +148,22 @@ html[data-reduced-motion="true"] *::after {
     --face-light 0.7s cubic-bezier(0.16, 1, 0.3, 1),
     --face-glow 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* Cursor de escritura de Shadow: va pegado al último bloque del Markdown. */
+.shadow-streaming > :last-child::after {
+  content: "";
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: currentColor;
+  animation: shadow-caret 1s steps(2, start) infinite;
+}
+
+@keyframes shadow-caret {
+  to {
+    visibility: hidden;
+  }
+}

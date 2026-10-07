@@ -51,3 +51,17 @@ Shadow can execute backend tasks, native macOS commands, and browse the web auto
 4. `search_obsidian`: Retrieves context from the user's Second Brain.
 5. `append_obsidian_note`: Creates memories or updates its own rules.
 6. `close_daily_log`: Compiles daily metrics and exports them to a daily note in Obsidian.
+
+## Respuestas en vivo (streaming)
+- `runShadowTurn` (`src/features/shadow/turn.ts`) es el único camino de un turno: guarda el mensaje, carga contexto, corre el orquestador y persiste la respuesta. `askShadow` (acción de servidor, voz y daemon) y `POST /api/shadow/stream` lo usan igual.
+- La ruta responde NDJSON con eventos tipados en `src/features/shadow/protocol.ts`: `step` / `step_done` (pasos reales: contexto cargado, nota leída, gasto registrado…), `text` (fragmentos visibles), `reset` (el preámbulo antes de una herramienta se descarta) y `done` con el resultado final.
+- `MetadataStripper` oculta `<mood>` y `<widget>` mientras llegan, aunque vengan partidos entre fragmentos.
+- `remember_personal_context` nunca aparece como paso ni como fuente: el mantenimiento de memoria es invisible.
+- Si cierras la pestaña a media respuesta el turno termina igual y queda en el historial.
+- En el cliente, `streamShadow` agrupa el texto por cuadro de animación; la cara pasa a `thinking` con cada paso y a `speaking` mientras llega el texto.
+
+## Modelo y costos
+- Modelo por defecto: `claude-haiku-5-5`, con esfuerzo `medium` para el chat (`ANTHROPIC_EFFORT`) y `low` para tareas internas (indexación, resúmenes, nutrición). `ANTHROPIC_MODEL` permite cambiarlo; con modelos anteriores a `effort` el parámetro se omite solo (`modelOutputConfig`).
+- Haiku 5.5 rechaza `temperature`, `top_p`, `top_k` y el prefill: no los uses. Piensa por defecto y ese pensamiento cuenta dentro de `max_tokens`, por eso los topes son holgados.
+- Caché de prompt: las instrucciones fijas (`SHADOW_INSTRUCTIONS`) llevan el punto de caché junto con las herramientas; la fecha, la intención y el contexto van en un segundo bloque después. Nada variable debe entrar en `SHADOW_INSTRUCTIONS` o la caché se invalida en cada mensaje. Un segundo punto automático cubre el historial dentro del bucle de herramientas.
+- Verificación: `usage.cache_read_input_tokens` debe ser mayor que cero a partir del segundo mensaje.

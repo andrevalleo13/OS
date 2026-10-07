@@ -16,7 +16,7 @@ import {
   type MacroTotals,
   type ShadowNutritionInsight,
 } from "@/features/nutrition/nutrition";
-import { serverConfig } from "@/lib/config";
+import { modelOutputConfig, serverConfig } from "@/lib/config";
 import { dateKey, dayRange } from "@/lib/dates";
 import { errorMessage } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
@@ -162,9 +162,9 @@ Entrada del usuario: ${JSON.stringify(safeDescription)}
 
     const response = await anthropic.messages.create({
       model: serverConfig.anthropic.model,
-      max_tokens: 1_200,
+      max_tokens: 4_000,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
+      output_config: modelOutputConfig("low"),
     });
     const block = response.content.find((content) => content.type === "text");
     if (!block || block.type !== "text") throw new Error("Shadow no devolvió texto.");
@@ -356,9 +356,9 @@ Da una recomendación accionable de máximo 32 palabras, en español, sin emojis
 `;
       const response = await anthropic.messages.create({
         model: serverConfig.anthropic.model,
-        max_tokens: 120,
+        max_tokens: 1_024,
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.35,
+        output_config: modelOutputConfig("low"),
       });
       const block = response.content.find((content) => content.type === "text");
       if (block?.type === "text" && block.text.trim()) message = block.text.trim();
