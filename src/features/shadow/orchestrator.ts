@@ -8,6 +8,7 @@ import { errorMessage } from "@/lib/errors";
 import type { PendingShadowAction } from "./file-actions";
 import { executeShadowTool, SHADOW_TOOLS } from "./tools";
 import { cleanShadowMetadata } from "./response";
+import { mergeSources, sourceFromToolUse, type ShadowSource } from "./sources";
 
 const anthropic = new Anthropic({ apiKey: serverConfig.anthropic.apiKey });
 const MAX_TOOL_STEPS = 6;
@@ -23,6 +24,8 @@ export type ShadowResult = {
   mood: Mood;
   widget: Widget;
   pendingAction?: PendingShadowAction;
+  /** Herramientas visibles que Shadow usó para responder. */
+  sources?: ShadowSource[];
 };
 
 function safeHistory(input: unknown): MessageParam[] {
@@ -42,6 +45,7 @@ export async function runShadowConversation(
   try {
     const messages = safeHistory(history);
     let pendingAction: PendingShadowAction | undefined;
+    const sources: ShadowSource[] = [];
 
     for (let step = 0; step < MAX_TOOL_STEPS; step += 1) {
       const response = await anthropic.messages.create({
@@ -55,11 +59,13 @@ export async function runShadowConversation(
       const toolUses = response.content.filter((block) => block.type === "tool_use");
       if (response.stop_reason !== "tool_use" || toolUses.length === 0) {
         const text = response.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
-        return { success: true, ...cleanShadowMetadata(text || "Listo."), pendingAction };
+        return { success: true, ...cleanShadowMetadata(text || "Listo."), pendingAction, sources: mergeSources(sources) };
       }
 
       const toolResults: ToolResultBlockParam[] = [];
       for (const toolUse of toolUses) {
+        const source = sourceFromToolUse(toolUse.name, toolUse.input);
+        if (source) sources.push(source);
         const result = await executeShadowTool(toolUse, context);
         pendingAction = result.pendingAction ?? pendingAction;
         toolResults.push({ type: "tool_result", tool_use_id: toolUse.id, content: result.content.slice(0, 10_000) });
@@ -68,7 +74,7 @@ export async function runShadowConversation(
       messages.push({ role: "user", content: toolResults });
     }
 
-    return { success: false, text: "Detuve la operación porque alcanzó el límite seguro de pasos.", mood: "warning", widget: "none", pendingAction };
+    return { success: false, text: "Detuve la operación porque alcanzó el límite seguro de pasos.", mood: "warning", widget: "none", pendingAction, sources: mergeSources(sources) };
   } catch (error) {
     console.error(`Shadow orchestration failed: ${errorMessage(error)}`);
     return { success: false, text: "Shadow no pudo completar la solicitud.", mood: "urgent", widget: "none" };

@@ -17,6 +17,13 @@ function location(file: string, content: string, index: number): string {
   return `${path.relative(sourceRoot, file)}:${line}`;
 }
 
+/**
+ * Única excepción de color: la paleta de estados del personaje Shadow
+ * (CLAUDE.md permite los gradientes dinámicos del orbe). Todo color del orbe
+ * debe vivir en este archivo para que el resto de la interfaz siga monocromo.
+ */
+const COLOR_EXCEPTIONS = new Set([path.join("components", "shadow", "face", "palette.ts")]);
+
 describe("ValleOS visual policy", () => {
   it("keeps the interface monochrome", () => {
     const hueNames = ["red", "green", "blue", "purple", "violet", "cyan", "emerald", "amber", "orange", "yellow", "lime", "teal", "pink", "rose", "indigo", "sky", "fuchsia"];
@@ -24,6 +31,7 @@ describe("ValleOS visual policy", () => {
     const violations: string[] = [];
 
     for (const file of sourceFiles(sourceRoot)) {
+      if (COLOR_EXCEPTIONS.has(path.relative(sourceRoot, file))) continue;
       const content = fs.readFileSync(file, "utf8");
       for (const match of content.matchAll(hueUtility)) violations.push(location(file, content, match.index));
       for (const match of content.matchAll(/#[0-9a-fA-F]{6}/g)) {

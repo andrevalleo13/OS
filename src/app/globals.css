@@ -117,3 +117,34 @@ html[data-reduced-motion="true"] *::after {
 ::-webkit-scrollbar-thumb:hover {
   background: #3d3d3d;
 }
+
+/* Shadow: los colores del personaje son propiedades tipadas para que el navegador
+   pueda interpolarlas al cambiar de estado. */
+@property --face-core {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #121212;
+}
+@property --face-mid {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #3a3a3a;
+}
+@property --face-light {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #c9c9c9;
+}
+@property --face-glow {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #9a9a9a;
+}
+
+.shadow-face {
+  transition:
+    --face-core 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    --face-mid 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    --face-light 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    --face-glow 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}

@@ -15,6 +15,7 @@ import {
   type ShadowVoiceMessageDetail,
 } from "@/components/shadow/ShadowVoiceProvider";
 import type { ComposerMode, ShadowConversationMeta, ShadowMessage, ShadowStatus } from "@/components/shadow/types";
+import { statusFromMood } from "@/components/shadow/face/expressions";
 import type { PendingShadowAction } from "@/features/shadow/file-actions";
 import { uiAudio } from "@/utils/audio";
 
@@ -121,6 +122,28 @@ export default function ShadowPage() {
 
   const setConversationStatus = useCallback((key: string, nextStatus: ShadowStatus) => {
     setStatusByConversation((current) => ({ ...current, [key]: nextStatus }));
+  }, []);
+
+  /**
+   * Cierre de una respuesta: habla, muestra un instante el gesto del resultado
+   * (contento, preocupado o mareado) y vuelve a reposo. Los temporizadores
+   * nunca pisan un estado `thinking` que empezó después.
+   */
+  const settleConversation = useCallback((key: string, mood: string | undefined, speakingMs: number) => {
+    const settleUnlessBusy = (next: ShadowStatus) =>
+      setStatusByConversation((current) => current[key] === "thinking" ? current : { ...current, [key]: next });
+    const finale = statusFromMood(mood);
+    const speakingTimer = window.setTimeout(() => {
+      timersRef.current.delete(speakingTimer);
+      settleUnlessBusy(finale);
+      if (finale === "idle") return;
+      const finaleTimer = window.setTimeout(() => {
+        timersRef.current.delete(finaleTimer);
+        settleUnlessBusy("idle");
+      }, finale === "error" ? 2_600 : 1_600);
+      timersRef.current.add(finaleTimer);
+    }, speakingMs);
+    timersRef.current.add(speakingTimer);
   }, []);
 
   useEffect(() => {
@@ -240,11 +263,7 @@ export default function ShadowPage() {
       appendMessage(conversationKey, message);
       setConversationStatus(conversationKey, "speaking");
       updateConversation(conversationKey, { preview: message.text, updatedAt: message.createdAt ?? new Date().toISOString() });
-      const timer = window.setTimeout(() => {
-        setConversationStatus(conversationKey, "idle");
-        timersRef.current.delete(timer);
-      }, Math.min(3_800, Math.max(1_200, message.text.split(/\s+/).length * 70)));
-      timersRef.current.add(timer);
+      settleConversation(conversationKey, message.mood, Math.min(3_800, Math.max(1_200, message.text.split(/\s+/).length * 70)));
     };
     window.addEventListener(SHADOW_VOICE_USER_EVENT, handleUserMessage);
     window.addEventListener(SHADOW_VOICE_ASSISTANT_EVENT, handleAssistantMessage);
@@ -252,7 +271,7 @@ export default function ShadowPage() {
       window.removeEventListener(SHADOW_VOICE_USER_EVENT, handleUserMessage);
       window.removeEventListener(SHADOW_VOICE_ASSISTANT_EVENT, handleAssistantMessage);
     };
-  }, [appendMessage, setConversationStatus, updateConversation]);
+  }, [appendMessage, setConversationStatus, settleConversation, updateConversation]);
 
   const processCommand = useCallback(async (rawCommand: string) => {
     const command = rawCommand.trim();
@@ -282,6 +301,7 @@ export default function ShadowPage() {
         mood: result.mood,
         widget: result.widget,
         pendingAction: result.pendingAction,
+        sources: result.sources,
         createdAt: new Date().toISOString(),
       };
       appendMessage(conversationKey, response);
@@ -292,16 +312,13 @@ export default function ShadowPage() {
         const widgetTimer = window.setTimeout(() => uiAudio.playWidgetSpawn(), 420);
         timersRef.current.add(widgetTimer);
       }
-      const idleTimer = window.setTimeout(() => {
-        setConversationStatus(conversationKey, "idle");
-        timersRef.current.delete(idleTimer);
-      }, Math.min(2600, Math.max(900, result.text.split(/\s+/).length * 55)));
-      timersRef.current.add(idleTimer);
+      settleConversation(conversationKey, result.mood, Math.min(2600, Math.max(900, result.text.split(/\s+/).length * 55)));
     } catch {
       appendMessage(conversationKey, { id: makeId("error"), sender: "SHDW", text: "No pude completar la solicitud. El mensaje permanece en este hilo para que puedas reintentarlo.", mood: "urgent", createdAt: new Date().toISOString() });
-      setConversationStatus(conversationKey, "idle");
+      setConversationStatus(conversationKey, "error");
+      settleConversation(conversationKey, undefined, 2_600);
     }
-  }, [activeConversation.title, activeKey, appendMessage, setConversationStatus, statusByConversation, updateConversation]);
+  }, [activeConversation.title, activeKey, appendMessage, setConversationStatus, settleConversation, statusByConversation, updateConversation]);
 
   useEffect(() => {
     if (!hydrated || !pendingQuery.current) return;
@@ -356,9 +373,11 @@ export default function ShadowPage() {
     }
     setConversationStatus(conversationKey, "thinking");
     const result = await approveShadowAction(action.id);
-    appendMessage(conversationKey, { id: makeId("action"), sender: "SHDW", text: result.message, mood: result.success ? "success" : "urgent", createdAt: new Date().toISOString() });
-    setConversationStatus(conversationKey, "idle");
-  }, [activeKey, appendMessage, setConversationStatus]);
+    const mood = result.success ? "success" : "urgent";
+    appendMessage(conversationKey, { id: makeId("action"), sender: "SHDW", text: result.message, mood, createdAt: new Date().toISOString() });
+    setConversationStatus(conversationKey, statusFromMood(mood));
+    settleConversation(conversationKey, undefined, 1_800);
+  }, [activeKey, appendMessage, setConversationStatus, settleConversation]);
 
   const sortedConversations = useMemo(() => [...conversations].sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()), [conversations]);
 

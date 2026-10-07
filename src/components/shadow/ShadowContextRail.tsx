@@ -18,6 +18,9 @@ const STATUS_COPY: Record<ShadowStatus, { label: string; detail: string }> = {
   listening: { label: "Escuchando", detail: "Capturando tu mensaje" },
   thinking: { label: "Procesando", detail: "Construyendo una respuesta" },
   speaking: { label: "Respondiendo", detail: "Entregando el resultado" },
+  done: { label: "Listo", detail: "La tarea quedó resuelta" },
+  warning: { label: "Atención", detail: "Hay algo que revisar" },
+  error: { label: "Algo falló", detail: "No pude completar la solicitud" },
 };
 
 export function ShadowContextRail(props: Props) {

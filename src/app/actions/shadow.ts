@@ -12,8 +12,9 @@ import {
   importConversationMessages,
 } from "@/features/shadow/conversations";
 import { summarizeConversationIfNeeded } from "@/features/shadow/conversation-summary";
-import { runShadowConversation } from "@/features/shadow/orchestrator";
+import { runShadowConversation, type ShadowResult } from "@/features/shadow/orchestrator";
 import { getNextProactiveInsight, runProactiveCycle } from "@/features/shadow/proactivity";
+import { mergeSources, sourcesFromRoute } from "@/features/shadow/sources";
 import { serverConfig } from "@/lib/config";
 import { errorMessage } from "@/lib/errors";
 
@@ -61,7 +62,7 @@ ${context}
 </selected_context>`;
 }
 
-export async function askShadow(rawInput: unknown) {
+export async function askShadow(rawInput: unknown): Promise<ShadowResult> {
   const input = askShadowSchema.parse(rawInput);
   if (!serverConfig.anthropic.apiKey) {
     return { success: false, text: "Falta configurar ANTHROPIC_API_KEY.", mood: "urgent" as const, widget: "none" as const };
@@ -98,7 +99,7 @@ export async function askShadow(rawInput: unknown) {
         console.error(`Background conversation summary failed: ${errorMessage(error)}`);
       });
     }
-    return result;
+    return { ...result, sources: mergeSources(sourcesFromRoute(route), result.sources) };
   } catch (error) {
     console.error(`Shadow request failed: ${errorMessage(error)}`);
     return { success: false, text: "Shadow no pudo completar la solicitud.", mood: "urgent" as const, widget: "none" as const };

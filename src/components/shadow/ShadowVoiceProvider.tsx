@@ -289,6 +289,7 @@ export function ShadowVoiceProvider({ children }: { children: React.ReactNode })
         mood: result.mood,
         widget: result.widget,
         pendingAction: result.pendingAction,
+        sources: result.sources,
         createdAt: new Date().toISOString(),
       };
       setLastResponse(result.text);

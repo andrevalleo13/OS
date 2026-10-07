@@ -11,12 +11,15 @@ import {
   Pause,
   Play,
   RefreshCw,
-  LoaderCircle,
   ShieldCheck,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import ShadowOrb from "@/components/ShadowOrb";
+import { ShadowConversation } from "@/components/shadow/ai/ShadowConversation";
+import { ShadowLoader } from "@/components/shadow/ai/ShadowLoader";
+import { ShadowResponse } from "@/components/shadow/ai/ShadowResponse";
+import { ShadowSources } from "@/components/shadow/ai/ShadowSources";
+import { ShadowSuggestions } from "@/components/shadow/ai/ShadowSuggestions";
+import { STATUS_LABEL } from "@/components/shadow/face/palette";
 import { ShadowWidgetRenderer } from "@/components/widgets/ShadowWidgetRenderer";
 import type { PendingShadowAction } from "@/features/shadow/file-actions";
 import type { ShadowMessage, ShadowStatus } from "./types";
@@ -37,9 +40,9 @@ type Props = {
 };
 
 const SUGGESTIONS = [
-  { eyebrow: "ORGANIZAR", label: "Planea el resto de mi día" },
-  { eyebrow: "SITUACIÓN", label: "¿Qué merece mi atención ahora?" },
-  { eyebrow: "CIERRE", label: "Ayúdame a cerrar el día" },
+  { id: "organizar", eyebrow: "ORGANIZAR", label: "Planea el resto de mi día" },
+  { id: "situacion", eyebrow: "SITUACIÓN", label: "¿Qué merece mi atención ahora?" },
+  { id: "cierre", eyebrow: "CIERRE", label: "Ayúdame a cerrar el día" },
 ];
 
 export function ShadowWorkspace({
@@ -65,12 +68,12 @@ export function ShadowWorkspace({
           <History className="h-4 w-4" />
         </button>
         <div className="flex h-8 w-8 shrink-0 items-center justify-center">
-          <ShadowOrb status={status} hideBackground paused={motionPaused} />
+          <ShadowOrb status={status} hideBackground paused={motionPaused} gaze={false} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[12px] font-medium tracking-[-0.01em] text-white/80">{title}</p>
           <p className="mt-0.5 font-mono text-[8px] uppercase tracking-[0.15em] text-white/22">
-            {status === "idle" ? "Contexto listo" : status === "thinking" ? "Procesando" : status === "listening" ? "Escuchando" : "Respondiendo"}
+            {status === "idle" ? "Contexto listo" : STATUS_LABEL[status]}
           </p>
         </div>
         <button onClick={onToggleMotion} className="hidden h-8 items-center gap-2 rounded-lg px-2 text-[9px] text-white/25 transition hover:bg-white/[0.04] hover:text-white/60 sm:flex" aria-label={motionPaused ? "Reanudar animaciones" : "Pausar animaciones"}>
@@ -89,7 +92,7 @@ export function ShadowWorkspace({
         {loading ? <ConversationSkeleton /> : error ? <ConversationError message={error} onRetry={onRetryLoad} /> : logs.length === 0 ? (
           <EmptyConversation status={status} motionPaused={motionPaused} onSuggestion={onSuggestion} />
         ) : (
-          <MessageTimeline logs={logs} status={status} onActionDecision={onActionDecision} />
+          <MessageTimeline logs={logs} status={status} motionPaused={motionPaused} onActionDecision={onActionDecision} />
         )}
       </main>
     </div>
@@ -99,33 +102,26 @@ export function ShadowWorkspace({
 const EmptyConversation = memo(function EmptyConversation({ status, motionPaused, onSuggestion }: { status: ShadowStatus; motionPaused: boolean; onSuggestion: (value: string) => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col items-center overflow-y-auto px-5 py-8 sm:justify-center sm:py-10">
-      <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }} className="relative h-32 w-32 sm:h-40 sm:w-40">
+      <motion.div initial={{ opacity: 0, scale: 0.86, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 160, damping: 18 }} className="relative h-32 w-32 sm:h-40 sm:w-40">
         <ShadowOrb status={status} paused={motionPaused} />
       </motion.div>
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.55 }} className="mt-6 text-center">
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.5, ease: [0.16, 1, 0.3, 1] }} className="mt-7 text-center">
         <p className="text-xl font-light tracking-[-0.04em] text-white/85 sm:text-2xl">¿Qué vamos a resolver?</p>
         <p className="mx-auto mt-2 max-w-md text-[11px] leading-relaxed text-white/30 sm:text-xs">Este es un contexto nuevo. Shadow conserva tu memoria personal, pero este hilo comienza limpio.</p>
       </motion.div>
-
-      <motion.div initial="hidden" animate="visible" variants={{ visible: { transition: { staggerChildren: 0.07, delayChildren: 0.2 } } }} className="mt-8 grid w-full max-w-2xl gap-px overflow-hidden rounded-2xl border border-white/[0.055] bg-white/[0.055] sm:grid-cols-3">
-        {SUGGESTIONS.map((suggestion) => (
-          <motion.button key={suggestion.label} variants={{ hidden: { opacity: 0, y: 8 }, visible: { opacity: 1, y: 0 } }} onClick={() => onSuggestion(suggestion.label)} className="group bg-[#0d0d0d] px-4 py-4 text-left transition hover:bg-[#121212] active:scale-[0.99]">
-            <span className="font-mono text-[8px] tracking-[0.16em] text-white/20">{suggestion.eyebrow}</span>
-            <span className="mt-2 block text-[10px] leading-relaxed text-white/48 transition group-hover:text-white/75">{suggestion.label}</span>
-          </motion.button>
-        ))}
-      </motion.div>
+      <ShadowSuggestions
+        variant="cards"
+        suggestions={SUGGESTIONS}
+        disabled={status === "thinking"}
+        onSelect={(suggestion) => onSuggestion(suggestion.label)}
+        className="mt-8 max-w-2xl"
+      />
     </div>
   );
 });
 
-function MessageTimeline({ logs, status, onActionDecision }: { logs: ShadowMessage[]; status: ShadowStatus; onActionDecision: Props["onActionDecision"] }) {
+function MessageTimeline({ logs, status, motionPaused, onActionDecision }: { logs: ShadowMessage[]; status: ShadowStatus; motionPaused: boolean; onActionDecision: Props["onActionDecision"] }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const bottomId = `shadow-message-end-${logs.length}`;
-
-  useEffect(() => {
-    document.getElementById(bottomId)?.scrollIntoView({ behavior: logs.length > 1 ? "smooth" : "auto", block: "end" });
-  }, [bottomId, logs.length, status]);
 
   const copyMessage = async (message: ShadowMessage) => {
     await navigator.clipboard.writeText(message.text);
@@ -134,7 +130,7 @@ function MessageTimeline({ logs, status, onActionDecision }: { logs: ShadowMessa
   };
 
   return (
-    <div className="h-full overflow-y-auto overscroll-contain px-4 py-8 sm:px-8">
+    <ShadowConversation contentKey={`${logs.length}:${status}`} innerClassName="px-4 py-8 sm:px-8">
       <div className="mx-auto max-w-3xl space-y-8 pb-8">
         <div className="flex items-center gap-3"><span className="h-px flex-1 bg-white/[0.045]" /><span className="font-mono text-[8px] uppercase tracking-[0.16em] text-white/18">Hoy</span><span className="h-px flex-1 bg-white/[0.045]" /></div>
         {logs.map((message) => {
@@ -148,15 +144,16 @@ function MessageTimeline({ logs, status, onActionDecision }: { logs: ShadowMessa
                 </div>
               ) : (
                 <div className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 sm:grid-cols-[32px_minmax(0,1fr)] sm:gap-4">
-                  <div className="mt-0.5 h-7 w-7 sm:h-8 sm:w-8"><ShadowOrb status="idle" hideBackground paused /></div>
+                  <div className="mt-0.5 h-7 w-7 sm:h-8 sm:w-8"><ShadowOrb mood={message.mood} hideBackground paused /></div>
                   <div className="min-w-0">
                     <div className="mb-2 flex items-center gap-2"><span className="text-[10px] font-medium text-white/60">Shadow</span>{message.createdAt ? <time className="font-mono text-[8px] text-white/18">{new Date(message.createdAt).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}</time> : null}</div>
-                    <div className="prose prose-invert max-w-none text-[13px] font-light leading-relaxed text-white/72 prose-headings:font-medium prose-headings:text-white/85 prose-p:my-2 prose-p:leading-relaxed prose-li:my-0.5 prose-strong:text-white/85 prose-code:text-white/65 prose-pre:border prose-pre:border-white/[0.065] prose-pre:bg-white/[0.025]">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.text}</ReactMarkdown>
+                    <ShadowResponse text={message.text} createdAt={message.createdAt} reveal={!motionPaused} />
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                      {message.sources?.length ? <ShadowSources sources={message.sources} /> : null}
+                      <button onClick={() => void copyMessage(message)} className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-[8px] text-white/0 transition hover:bg-white/[0.035] hover:text-white/45 group-hover/message:text-white/20 focus-visible:text-white/45" aria-label="Copiar respuesta">
+                        {copiedId === message.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}{copiedId === message.id ? "Copiado" : "Copiar"}
+                      </button>
                     </div>
-                    <button onClick={() => void copyMessage(message)} className="mt-2 flex h-7 items-center gap-1.5 rounded-lg px-2 text-[8px] text-white/0 transition hover:bg-white/[0.035] hover:text-white/45 group-hover/message:text-white/20 focus-visible:text-white/45" aria-label="Copiar respuesta">
-                      {copiedId === message.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}{copiedId === message.id ? "Copiado" : "Copiar"}
-                    </button>
                   </div>
                 </div>
               )}
@@ -168,24 +165,31 @@ function MessageTimeline({ logs, status, onActionDecision }: { logs: ShadowMessa
             </motion.article>
           );
         })}
-        <AnimatePresence>{status === "thinking" ? <ThinkingTrace /> : null}</AnimatePresence>
-        <div id={bottomId} className="h-px" />
+        <AnimatePresence>{status === "thinking" ? <ThinkingTrace motionPaused={motionPaused} /> : null}</AnimatePresence>
       </div>
-    </div>
+    </ShadowConversation>
   );
 }
 
-function ThinkingTrace() {
-  const steps = ["Interpretando", "Consultando contexto", "Construyendo respuesta"];
+const THINKING_STEPS = ["Interpretando", "Leyendo tu contexto", "Construyendo respuesta"];
+
+function ThinkingTrace({ motionPaused }: { motionPaused: boolean }) {
   const [step, setStep] = useState(0);
   useEffect(() => {
-    const interval = window.setInterval(() => setStep((current) => (current + 1) % steps.length), 1100);
+    const interval = window.setInterval(() => setStep((current) => Math.min(current + 1, THINKING_STEPS.length - 1)), 1400);
     return () => window.clearInterval(interval);
-  }, [steps.length]);
+  }, []);
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="grid grid-cols-[32px_minmax(0,1fr)] gap-4" aria-live="polite">
-      <div className="h-8 w-8"><ShadowOrb status="thinking" hideBackground /></div>
-      <div className="pt-1"><div className="flex items-center gap-2"><LoaderCircle className="h-3 w-3 animate-spin text-white/40" /><span className="font-mono text-[8px] uppercase tracking-[0.15em] text-white/30">{steps[step]}</span></div><div className="mt-3 h-px w-28 overflow-hidden bg-white/[0.055]"><motion.div className="h-full bg-white/40" animate={{ x: ["-100%", "140%"] }} transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }} /></div></div>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 sm:grid-cols-[32px_minmax(0,1fr)] sm:gap-4">
+      <div className="h-7 w-7 sm:h-8 sm:w-8"><ShadowOrb status="thinking" hideBackground paused={motionPaused} gaze={false} /></div>
+      <div className="flex flex-col gap-2.5 pt-1.5">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span key={step} initial={{ opacity: 0, y: 4, filter: "blur(4px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }} exit={{ opacity: 0, y: -4, filter: "blur(4px)" }} transition={{ duration: 0.22 }}>
+            <ShadowLoader variant="dots" label={THINKING_STEPS[step]} showElapsed />
+          </motion.span>
+        </AnimatePresence>
+        <ShadowLoader variant="bar" />
+      </div>
     </motion.div>
   );
 }
