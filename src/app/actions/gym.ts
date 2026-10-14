@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { SessionHistory, PersonalRecord } from "@/components/gym/MuscleData";
 import { dateKey } from "@/lib/dates";
 import { serverConfig } from "@/lib/config";
+import { revalidatePath } from "next/cache";
 
 function getRelativeTime(date: Date) {
   const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
@@ -157,6 +158,7 @@ export async function logSteps(steps: number) {
 }
 
 export async function logWeight(weight: number) {
+  if (finiteNumber(weight, 20, 300) === null) return { success: false };
   try {
     await prisma.biometricLog.create({
       data: {
@@ -173,22 +175,50 @@ export async function logWeight(weight: number) {
   }
 }
 
-import { revalidatePath } from "next/cache";
+type WorkoutExerciseInput = { name: string; sets: number; reps: string; weight: number | null; muscleId: string };
+
+function finiteNumber(value: unknown, min: number, max: number): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? value : null;
+}
+
+/** Valida en el servidor: las acciones son endpoints públicos. */
+function cleanWorkout(title: unknown, duration: unknown, volume: unknown, exercises: unknown) {
+  const cleanTitle = typeof title === "string" ? title.trim().slice(0, 120) : "";
+  const cleanDuration = finiteNumber(duration, 0, 24 * 60);
+  const cleanVolume = finiteNumber(volume, 0, 1_000_000);
+  if (!cleanTitle || cleanDuration === null || cleanVolume === null || !Array.isArray(exercises) || exercises.length > 60) return null;
+  const items: WorkoutExerciseInput[] = [];
+  for (const raw of exercises as Partial<WorkoutExerciseInput>[]) {
+    const name = typeof raw?.name === "string" ? raw.name.trim().slice(0, 120) : "";
+    const sets = finiteNumber(raw?.sets, 1, 50);
+    if (!name || sets === null) return null;
+    items.push({
+      name,
+      sets: Math.round(sets),
+      reps: typeof raw.reps === "string" ? raw.reps.slice(0, 120) : "",
+      weight: finiteNumber(raw.weight, 0.1, 1_000),
+      muscleId: typeof raw.muscleId === "string" && raw.muscleId ? raw.muscleId.slice(0, 40) : "other",
+    });
+  }
+  return { title: cleanTitle, duration: Math.round(cleanDuration), volume: cleanVolume, exercises: items };
+}
 
 export async function saveWorkoutSession(
   title: string, 
   duration: number, 
   volume: number,
-  exercises: { name: string; sets: number; reps: string; weight: number; muscleId: string }[]
+  exercises: { name: string; sets: number; reps: string; weight: number | null; muscleId: string }[]
 ) {
+  const workout = cleanWorkout(title, duration, volume, exercises);
+  if (!workout) return { success: false };
   try {
     await prisma.workoutSession.create({
       data: {
-        title,
-        duration,
-        volume,
+        title: workout.title,
+        duration: workout.duration,
+        volume: workout.volume,
         exercises: {
-          create: exercises.map(ex => ({
+          create: workout.exercises.map(ex => ({
             name: ex.name,
             sets: ex.sets,
             reps: ex.reps,
