@@ -14,9 +14,9 @@ Bienvenido a ValleOS. Al asistir en este proyecto, debes adherirte estrictamente
 - **GSAP**: Reservado para líneas de tiempo coordinadas complejas (como la cascada de texto al expandir/colapsar la barra lateral). No mezcles GSAP y Framer Motion en las mismas propiedades exactas.
 
 ## 3. Integración 3D y WebGL
-- **Librerías**: Usa `@react-three/fiber` y `@react-three/drei` para todo el renderizado 3D en canvas.
-- **Rendimiento**: Asegúrate de que los archivos pesados `.glb` se carguen con límites de `<Suspense>` para evitar que Next.js colapse.
-- **Interactividad**: Para mallas complejas donde el raycasting de músculos individuales no es posible de forma nativa, usa overlays procedimentales transparentes ("Hitboxes AR") para restaurar las interacciones del puntero.
+- **Estado actual**: three.js y `@react-three/*` se quitaron del proyecto (oct 2026) junto con el modelo 3D del gimnasio. No hay renderizado 3D en la app.
+- **Próximo**: el cuerpo 3D real de André se construirá a partir de sus fotos; la librería se elige en ese momento. La tarjeta "Próximamente" de `/gym` es el lugar reservado.
+- **Rendimiento**: cuando vuelva el 3D, carga los archivos pesados (`.glb`) dentro de `<Suspense>`.
 
 ## 4. Reglas de Arquitectura
 - **Framework**: Next.js 14 App Router.
