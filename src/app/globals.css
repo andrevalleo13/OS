@@ -58,6 +58,11 @@ select:focus-visible {
   outline-width: 1px;
 }
 
+/* Campos de la bóveda que ya marcan el foco con su propio borde o cursor. */
+.vault-plain-input:focus-visible {
+  outline: none;
+}
+
 .os-message-input:focus-visible {
   outline: none;
 }

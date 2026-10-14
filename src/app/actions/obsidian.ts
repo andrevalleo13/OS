@@ -2,14 +2,34 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { serverConfig } from "@/lib/config";
-import { ForbiddenError, ValidationError } from "@/lib/errors";
+import { dateKey } from "@/lib/dates";
+import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { publishLifeEvent } from "@/features/shadow/events";
 import { upsertLifeEntity } from "@/features/shadow/life-graph";
+import {
+  appendUnderHeading,
+  cleanEntityName,
+  CONNECTIONS_HEADING,
+  datedBullet,
+  entityNoteContent,
+  findSections,
+  hasFact,
+  MEMORY_HEADING,
+  oneLineFact,
+  sectionBody,
+  withoutQualifier,
+  type EntityTipo,
+} from "@/features/vault/conventions";
+import { atomicWrite, cleanEntryName } from "@/features/vault/fs";
+import { getVaultIndex, invalidateVaultIndex, type IndexedNote, type VaultIndex } from "@/features/vault/index";
+import { readNote, saveNote } from "@/features/vault/ops";
+import { basenameOf, nameKey, splitLinkInner } from "@/features/vault/parse";
+import { contentHash, recordObsidianRevision } from "@/features/vault/revisions";
+import { canonicalLink, dailyNoteName, propagateToDaily, resolveEntityLink } from "@/features/vault/shadow-writes";
 
 const filenameSchema = z.string().trim().min(1).max(500).refine((value) => !value.includes("\0"));
 const contentSchema = z.string().min(1).max(100_000);
@@ -151,6 +171,7 @@ const memoryKindSchema = z.enum([
   "place",
   "project",
   "concept",
+  "group",
   "preference",
   "goal",
   "relationship",
@@ -166,51 +187,65 @@ const curatedMemorySchema = z.object({
   sensitive: z.boolean().default(false),
 });
 
-type CuratedMemory = z.infer<typeof curatedMemorySchema>;
+type MemoryKind = z.infer<typeof memoryKindSchema>;
+
+const MEMORY_INBOX = "000 - Inbox/Shadow Memory Inbox.md";
+const PENDING_HEADING = "Memoria pendiente de resolver";
+
+const KIND_TIPO: Record<MemoryKind, EntityTipo> = {
+  person: "persona",
+  relationship: "persona",
+  place: "lugar",
+  project: "proyecto",
+  concept: "concepto",
+  group: "grupo",
+  preference: "sistema",
+  goal: "sistema",
+  routine: "sistema",
+};
 
 function normalizeMemoryValue(value: string): string {
   return value
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
-function noteIdentities(file: string, content: string): string[] {
-  const identities = new Set<string>([path.basename(file, ".md")]);
-  const title = content.match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1];
-  const heading = content.match(/^#\s+(.+?)\s*$/m)?.[1];
-  const inlineAliases = content.match(/^aliases:\s*\[(.*?)\]\s*$/m)?.[1];
-  if (title) identities.add(title);
+/** Nombres con los que una nota puede referirse a su entidad. */
+function noteIdentities(note: IndexedNote): string[] {
+  const identities = new Set<string>([note.title, ...note.parsed.aliases]);
+  const title = note.parsed.frontmatter.title;
+  if (typeof title === "string") identities.add(title);
+  const heading = note.parsed.headings.find((item) => item.level === 1)?.text;
   if (heading) identities.add(heading.replace(/^[^\p{L}\p{N}]+/u, ""));
-  if (inlineAliases) {
-    for (const alias of inlineAliases.split(",")) identities.add(alias.replace(/["']/g, "").trim());
-  }
   return [...identities].filter(Boolean);
 }
 
-function expectedFolder(kind: CuratedMemory["kind"]): string | undefined {
+function expectedFolder(kind: MemoryKind): string | undefined {
   if (kind === "person" || kind === "relationship") return "500 - Entidades/Personas";
   if (kind === "place") return "500 - Entidades/Lugares";
+  if (kind === "group") return "500 - Entidades/Grupos";
   if (kind === "project") return "100 - Proyectos";
   if (kind === "concept") return "500 - Entidades/Conceptos";
   return undefined;
 }
 
-function fixedMemoryTarget(kind: CuratedMemory["kind"]): string | undefined {
+function fixedMemoryTarget(kind: MemoryKind): string | undefined {
   if (kind === "preference") return "900 - Sistema/Directivas de Shadow.md";
   if (kind === "goal") return "001 - Status Board.md";
   if (kind === "routine") return "900 - Sistema/Rutina Diaria.md";
   return undefined;
 }
 
-function candidateScore(subject: string, identities: string[], relativePath: string, kind: CuratedMemory["kind"]): number {
+function candidateScore(subject: string, identities: string[], relativePath: string, kind: MemoryKind): number {
   const target = normalizeMemoryValue(subject);
   let score = 0;
   for (const identity of identities) {
     const candidate = normalizeMemoryValue(identity);
     if (candidate === target) score = Math.max(score, 100);
+    else if (normalizeMemoryValue(withoutQualifier(identity)) === target) score = Math.max(score, 95);
     else if (candidate.length >= 4 && target.length >= 4 && (candidate.includes(target) || target.includes(candidate))) {
       score = Math.max(score, 82);
     } else {
@@ -226,165 +261,161 @@ function candidateScore(subject: string, identities: string[], relativePath: str
   return score;
 }
 
-function safeEntityFilename(subject: string): string {
-  const filename = subject.replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
-  if (!filename || filename === "." || filename === "..") throw new ValidationError("Nombre de entidad inválido.");
-  return `${filename}.md`;
-}
+type CuratedTarget =
+  | { status: "matched" | "new"; path: string }
+  | { status: "ambiguous"; path: string; candidates: string[] };
 
-function addBulletToSection(content: string, heading: string, bullet: string): { content: string; changed: boolean } {
-  const firstBulletLine = normalizeMemoryValue(bullet.split("\n")[0].replace(/^-\s*/, ""));
-  const alreadyExists = content.split("\n").some((line) =>
-    normalizeMemoryValue(line.replace(/^\s*-\s*/, "")) === firstBulletLine
-  );
-  if (alreadyExists) {
-    return { content, changed: false };
+function resolveCuratedTarget(index: VaultIndex, kind: MemoryKind, subject: string): CuratedTarget {
+  const fixed = fixedMemoryTarget(kind);
+  if (fixed) return { status: "matched", path: fixed };
+
+  const scored = [...index.notes.values()]
+    .filter((note) => note.path !== MEMORY_INBOX && !/(^|\/)plantillas?\//i.test(note.path))
+    .map((note) => ({ path: note.path, score: candidateScore(subject, noteIdentities(note), note.path, kind) }))
+    .sort((a, b) => b.score - a.score);
+  const [best, second] = scored;
+
+  if (best && best.score >= 90 && (!second || best.score - second.score >= 5)) return { status: "matched", path: best.path };
+  if (best && best.score >= 65) {
+    return {
+      status: "ambiguous",
+      path: MEMORY_INBOX,
+      candidates: scored.slice(0, 3).filter((item) => item.score >= 50).map((item) => item.path),
+    };
   }
-  const headingPattern = new RegExp(`^##\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "mi");
-  const match = headingPattern.exec(content);
-  if (!match || match.index === undefined) {
-    return { content: `${content.trimEnd()}\n\n## ${heading}\n${bullet}\n`, changed: true };
+  const folder = expectedFolder(kind) ?? "000 - Inbox";
+  return { status: "new", path: `${folder}/${cleanEntryName(subject)}.md` };
+}
+
+async function readIfExists(notePath: string): Promise<string | null> {
+  try {
+    return (await readNote(notePath)).content;
+  } catch (error) {
+    if (error instanceof NotFoundError) return null;
+    throw error;
   }
-  const insertAt = match.index + match[0].length;
-  return {
-    content: `${content.slice(0, insertAt)}\n${bullet}${content.slice(insertAt)}`,
-    changed: true,
-  };
 }
 
-async function atomicWriteMarkdown(target: string, content: string) {
-  const temporary = `${target}.shadow-${process.pid}-${Date.now()}.tmp`;
-  await fs.writeFile(temporary, content, "utf8");
-  await fs.rename(temporary, target);
-}
-
-function contentHash(content: string): string {
-  return crypto.createHash("sha256").update(content).digest("hex");
-}
-
-async function recordObsidianRevision(input: {
-  relativePath: string;
-  beforeContent: string;
-  afterContent: string;
-  operation: "create" | "update";
-}) {
-  return prisma.obsidianRevision.create({
-    data: {
-      path: input.relativePath,
-      operation: input.operation,
-      beforeContent: input.beforeContent,
-      afterContent: input.afterContent,
-      beforeHash: contentHash(input.beforeContent),
-      afterHash: contentHash(input.afterContent),
-    },
+/** ¿La sección de conexiones ya enlaza a esta entidad? */
+function hasConnection(index: VaultIndex, content: string, notePath: string, link: { link: string; path: string | null }): boolean {
+  const wanted = nameKey(link.link);
+  return findSections(content, CONNECTIONS_HEADING).some((section) => {
+    for (const match of sectionBody(content, section).matchAll(/\[\[([^\]]+)\]\]/g)) {
+      const { target } = splitLinkInner(match[1]);
+      if (!target) continue;
+      if (nameKey(target) === wanted) return true;
+      if (link.path && index.resolve(target, notePath) === link.path) return true;
+    }
+    return false;
   });
 }
 
-async function resolveCuratedTarget(input: CuratedMemory) {
-  const fixed = fixedMemoryTarget(input.kind);
-  if (fixed) {
-    const target = await safeTarget(fixed, "append");
-    return { target, relativePath: fixed, status: "matched" as const, candidates: [] as string[] };
-  }
-
-  const root = await vaultRoot();
-  const files = await getAllMarkdownFiles(root, root);
-  const scored = await Promise.all(files.map(async (file) => {
-    const content = await fs.readFile(file, "utf8");
-    const relativePath = path.relative(root, file);
-    return {
-      file,
-      relativePath,
-      score: candidateScore(input.subject, noteIdentities(file, content), relativePath, input.kind),
-    };
-  }));
-  scored.sort((a, b) => b.score - a.score);
-  const best = scored[0];
-  const second = scored[1];
-
-  if (best && best.score >= 90 && (!second || best.score - second.score >= 5)) {
-    return { target: best.file, relativePath: best.relativePath, status: "matched" as const, candidates: [] as string[] };
-  }
-  if (best && best.score >= 65) {
-    return {
-      target: await safeTarget("000 - Inbox/Shadow Memory Inbox.md", "append"),
-      relativePath: "000 - Inbox/Shadow Memory Inbox.md",
-      status: "ambiguous" as const,
-      candidates: scored.slice(0, 3).filter((item) => item.score >= 50).map((item) => item.relativePath),
-    };
-  }
-
-  const folder = expectedFolder(input.kind) ?? "000 - Inbox";
-  const relativePath = path.join(folder, safeEntityFilename(input.subject));
-  return {
-    target: await safeTarget(relativePath, "append"),
-    relativePath,
-    status: "new" as const,
-    candidates: [] as string[],
-  };
+async function saveRevisioned(notePath: string, before: string | null, after: string) {
+  await saveNote(notePath, after);
+  await recordObsidianRevision({
+    relativePath: notePath,
+    beforeContent: before ?? "",
+    afterContent: after,
+    operation: before === null ? "create" : "update",
+  });
 }
 
+const INBOX_SKELETON = `---
+tipo: sistema
+tags: [inbox, shadow]
+---
+
+# Shadow Memory Inbox
+
+> [!info] Resumen
+> Hechos que [[Shadow]] no pudo asignar con certeza a una nota. Muévelos a su entidad y bórralos de aquí.
+`;
+
+/**
+ * Memoria silenciosa de Shadow (`remember_personal_context`). Sigue el
+ * Protocolo de Conexiones: encuentra la nota de la entidad (o la crea con el
+ * formato de la bóveda), agrega un bullet fechado al final de la única
+ * `## Memoria de Shadow`, conecta entidades reales en `## 🔗 Conexiones` y
+ * propaga el hecho a la sección “🔁 Propagado a” del diario (Directivas §6).
+ */
 export async function curateObsidianMemory(rawInput: unknown) {
   const input = curatedMemorySchema.parse(rawInput);
-  const resolved = await resolveCuratedTarget(input);
-  let content: string;
-  let created = false;
-
-  try {
-    content = await fs.readFile(resolved.target, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    created = true;
-    content = `---\ntitle: ${input.subject}\naliases: []\ntags: [entity, ${input.kind}]\n---\n\n# ${input.subject}\n`;
-  }
+  const subject = cleanEntityName(input.subject);
+  if (!subject) throw new ValidationError("Nombre de entidad inválido.");
+  const fact = oneLineFact(input.fact);
+  const canonicalKey = normalizeMemoryValue(subject);
+  const today = dateKey(new Date(), serverConfig.timezone);
+  const index = await getVaultIndex();
+  const resolved = resolveCuratedTarget(index, input.kind, subject);
 
   if (resolved.status === "ambiguous") {
-    const entry = `- **${input.subject}** (${input.kind}): ${input.fact}\n  - Posibles notas: ${resolved.candidates.map((candidate) => `[[${candidate.replace(/\.md$/, "")}]]`).join(", ") || "ninguna"}`;
-    const update = addBulletToSection(content, "Memoria pendiente de resolver", entry);
-    if (update.changed) {
-      await atomicWriteMarkdown(resolved.target, update.content);
-      await recordObsidianRevision({
-        relativePath: resolved.relativePath,
-        beforeContent: created ? "" : content,
-        afterContent: update.content,
-        operation: created ? "create" : "update",
-      });
+    const before = await readIfExists(resolved.path);
+    const candidates = resolved.candidates.map((candidate) => `[[${canonicalLink(index, candidate)}]]`).join(", ") || "ninguna";
+    const headline = `**${subject}** (${input.kind}): ${fact}`;
+    const changed = !hasFact(before ?? "", headline);
+    if (changed) {
+      const entry = `- **[${today}]** ${headline}\n  - Posibles notas: ${candidates}`;
+      await saveRevisioned(resolved.path, before, appendUnderHeading(before ?? INBOX_SKELETON, PENDING_HEADING, entry));
     }
     await prisma.shadowMemory.upsert({
-      where: { kind_canonicalKey_content: { kind: input.kind, canonicalKey: normalizeMemoryValue(input.subject), content: input.fact } },
+      where: { kind_canonicalKey_content: { kind: input.kind, canonicalKey, content: input.fact } },
       create: {
         kind: input.kind,
         subject: input.subject,
-        canonicalKey: normalizeMemoryValue(input.subject),
+        canonicalKey,
         content: input.fact,
         source: "conversation",
-        sourceRef: resolved.relativePath,
+        sourceRef: resolved.path,
         confidence: Math.min(input.confidence, 0.6),
         sensitive: input.sensitive,
       },
-      update: { confidence: Math.min(input.confidence, 0.6), sourceRef: resolved.relativePath },
+      update: { confidence: Math.min(input.confidence, 0.6), sourceRef: resolved.path },
     });
-    return { status: update.changed ? "queued" : "duplicate", path: resolved.relativePath, connectionsAdded: 0 };
+    return { status: changed ? "queued" as const : "duplicate" as const, path: resolved.path, connectionsAdded: 0, propagatedTo: null };
   }
 
-  let updated = addBulletToSection(content, "Memoria de Shadow", `- ${input.fact}`);
-  let changed = updated.changed;
-  let connectionsAdded = 0;
-  for (const relatedEntity of input.relatedEntities) {
-    const connection = addBulletToSection(updated.content, "🔗 Conexiones", `- [[${relatedEntity}]]`);
-    if (connection.changed) connectionsAdded += 1;
-    changed = changed || connection.changed;
-    updated = connection;
-  }
-  if (created || changed) {
-    await atomicWriteMarkdown(resolved.target, updated.content);
-    await recordObsidianRevision({
-      relativePath: resolved.relativePath,
-      beforeContent: created ? "" : content,
-      afterContent: updated.content,
-      operation: created ? "create" : "update",
+  const notePath = resolved.path;
+  const before = await readIfExists(notePath);
+  const created = before === null;
+  const dailyName = await dailyNoteName().catch(() => null);
+  const bullet = datedBullet(today, fact, dailyName);
+
+  const seen = new Set<string>();
+  const links = input.relatedEntities
+    .map((name) => resolveEntityLink(index, name, notePath))
+    .filter((link): link is NonNullable<typeof link> => {
+      if (!link || seen.has(nameKey(link.link))) return false;
+      seen.add(nameKey(link.link));
+      return true;
     });
+
+  let after: string;
+  let memoryAdded = false;
+  let connectionsAdded = 0;
+  if (created) {
+    after = entityNoteContent({
+      name: basenameOf(notePath),
+      tipo: KIND_TIPO[input.kind],
+      summary: fact,
+      connections: links.map((link) => link.link),
+      bullet,
+    });
+    memoryAdded = true;
+    connectionsAdded = links.length;
+  } else {
+    after = before;
+    if (!hasFact(before, fact)) {
+      after = appendUnderHeading(after, MEMORY_HEADING, bullet, { which: "last" });
+      memoryAdded = true;
+    }
+    for (const link of links) {
+      if (hasConnection(index, after, notePath, link)) continue;
+      after = appendUnderHeading(after, CONNECTIONS_HEADING, `- [[${link.link}]]`, { before: MEMORY_HEADING });
+      connectionsAdded += 1;
+    }
   }
+  const changed = created || after !== before;
+  if (changed) await saveRevisioned(notePath, before, after);
 
   const entity = await upsertLifeEntity({
     kind: input.kind,
@@ -394,14 +425,14 @@ export async function curateObsidianMemory(rawInput: unknown) {
   });
 
   await prisma.shadowMemory.upsert({
-    where: { kind_canonicalKey_content: { kind: input.kind, canonicalKey: normalizeMemoryValue(input.subject), content: input.fact } },
+    where: { kind_canonicalKey_content: { kind: input.kind, canonicalKey, content: input.fact } },
     create: {
       kind: input.kind,
       subject: input.subject,
-      canonicalKey: normalizeMemoryValue(input.subject),
+      canonicalKey,
       content: input.fact,
       source: "conversation",
-      sourceRef: resolved.relativePath,
+      sourceRef: notePath,
       entityId: entity.id,
       confidence: input.confidence,
       sensitive: input.sensitive,
@@ -410,27 +441,40 @@ export async function curateObsidianMemory(rawInput: unknown) {
     update: {
       confidence: input.confidence,
       sensitive: input.sensitive,
-      sourceRef: resolved.relativePath,
+      sourceRef: notePath,
       entityId: entity.id,
       lastConfirmedAt: new Date(),
       active: true,
     },
   });
 
-  if (created || changed) {
+  // Los hechos nacen en el diario: la nota del día lista qué se tocó.
+  let propagatedTo: string | null = null;
+  if (memoryAdded) {
+    const title = basenameOf(notePath);
+    const link = created ? (index.resolve(title) ? notePath.replace(/\.md$/i, "") : title) : canonicalLink(index, notePath);
+    try {
+      propagatedTo = (await propagateToDaily(link, fact)).path;
+    } catch (error) {
+      console.error(`Shadow daily propagation failed: ${error instanceof Error ? error.message : "error desconocido"}`);
+    }
+  }
+
+  if (changed) {
     await publishLifeEvent({
       type: "memory.curated",
       source: "obsidian",
-      sourceId: `${resolved.relativePath}:${contentHash(updated.content)}`,
+      sourceId: `${notePath}:${contentHash(after)}`,
       summary: `${input.subject} fue consolidado en la memoria personal.`,
-      payload: { kind: input.kind, subject: input.subject, path: resolved.relativePath, connectionsAdded },
+      payload: { kind: input.kind, subject: input.subject, path: notePath, connectionsAdded, propagatedTo },
     });
   }
 
   return {
-    status: created ? "created" : changed ? "updated" : "duplicate",
-    path: resolved.relativePath,
+    status: created ? "created" as const : changed ? "updated" as const : "duplicate" as const,
+    path: notePath,
     connectionsAdded,
+    propagatedTo,
   };
 }
 
@@ -445,7 +489,8 @@ export async function restoreObsidianRevision(rawId: unknown) {
   }
 
   if (revision.operation === "create" && revision.beforeContent === "") await fs.unlink(target);
-  else await atomicWriteMarkdown(target, revision.beforeContent);
+  else await atomicWrite(target, revision.beforeContent);
+  invalidateVaultIndex();
   await prisma.obsidianRevision.update({
     where: { id },
     data: { status: "reverted", revertedAt: new Date() },

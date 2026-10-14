@@ -83,7 +83,7 @@ describe("runShadowConversation en streaming", () => {
     expect(events).toEqual([
       { type: "text", delta: "Déjame revisar." },
       { type: "reset" },
-      { type: "step", step: { id: "t1", label: "Leyendo Diego" } },
+      { type: "step", step: { id: "t1", label: "Leyendo Diego", tool: "read_obsidian_note" } },
       { type: "step_done", id: "t1", ok: true },
       { type: "text", delta: "Mañana ves a " },
       { type: "text", delta: "Diego." },

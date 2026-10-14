@@ -7,10 +7,9 @@ import { load } from "cheerio";
 import { z } from "zod";
 import { addTransaction } from "@/actions/finance";
 import { getDailyMacros, logFood } from "@/app/actions/nutrition";
-import { appendObsidianNote, curateObsidianMemory, readObsidianNote, searchObsidianNotes } from "@/app/actions/obsidian";
-import { dateKey } from "@/lib/dates";
+import { curateObsidianMemory, searchObsidianNotes } from "@/app/actions/obsidian";
 import { errorMessage, ForbiddenError, ValidationError } from "@/lib/errors";
-import { serverConfig } from "@/lib/config";
+import { appendToDaily, appendToVaultNote, createVaultNote, readVaultNote } from "@/features/vault/shadow-writes";
 import { listHomeDirectory, PendingShadowAction, queueFileAction } from "./file-actions";
 import { semanticSearchAsContext } from "./knowledge-index";
 import { auditShadowAction } from "./audit";
@@ -34,19 +33,19 @@ export const SHADOW_TOOLS: Tool[] = [
   },
   {
     name: "read_obsidian_note",
-    description: "Lee una nota específica dentro de la bóveda.",
-    input_schema: { type: "object", properties: { filename: { type: "string" } }, required: ["filename"] },
+    description: "Lee una nota de la bóveda. filename acepta la ruta ('500 - Entidades/Personas/Sofi.md') o solo el nombre de la nota ('Sofi'), igual que un [[enlace]]; devuelve también su ruta exacta.",
+    input_schema: { type: "object", properties: { filename: { type: "string", description: "Ruta o nombre de la nota." } }, required: ["filename"] },
   },
   {
     name: "remember_personal_context",
-    description: "Mantiene silenciosamente la memoria personal: encuentra y actualiza la nota existente, evita duplicados y conecta entidades relacionadas. Úsala cuando el usuario revele un hecho personal estable o corrija una preferencia. Nunca anuncies esta operación al usuario.",
+    description: "Mantiene silenciosamente la memoria personal: encuentra la nota de la entidad (o la crea con el formato de la bóveda), agrega un bullet fechado a su sección 'Memoria de Shadow', conecta entidades reales y lo propaga al diario. Úsala cuando el usuario revele un hecho personal estable o corrija una preferencia. Nunca anuncies esta operación al usuario.",
     input_schema: {
       type: "object",
       properties: {
-        kind: { type: "string", enum: ["person", "place", "project", "concept", "preference", "goal", "relationship", "routine"] },
-        subject: { type: "string", description: "Entidad o tema canónico al que pertenece el recuerdo." },
-        fact: { type: "string", description: "Hecho autocontenido, sin prefijos como 'el usuario dijo'." },
-        relatedEntities: { type: "array", items: { type: "string" }, description: "Personas, proyectos, lugares o conceptos que deben conectarse mediante wikilinks." },
+        kind: { type: "string", enum: ["person", "place", "project", "concept", "group", "preference", "goal", "relationship", "routine"] },
+        subject: { type: "string", description: "Nombre canónico de la entidad o tema, sin corchetes (p. ej. 'Jerry (UP)')." },
+        fact: { type: "string", description: "Hecho autocontenido en tercera persona, sin prefijos como 'el usuario dijo' ni fecha." },
+        relatedEntities: { type: "array", items: { type: "string" }, description: "Nombres de personas, proyectos, lugares o conceptos a conectar, sin [[ ]]. Se enlazan a la nota existente con su nombre real." },
         confidence: { type: "number", minimum: 0, maximum: 1 },
         sensitive: { type: "boolean" },
       },
@@ -54,8 +53,47 @@ export const SHADOW_TOOLS: Tool[] = [
     },
   },
   {
+    name: "create_obsidian_note",
+    description: "Crea una nota nueva en la bóveda siguiendo sus convenciones. Falla si ya existe una nota con ese nombre: entonces usa append_to_obsidian_note. folder: carpeta PARA existente ('000 - Inbox', '100 - Proyectos', '200 - Áreas', '300 - Recursos', '400 - Archivo' o '500 - Entidades/Personas|Lugares|Conceptos|Grupos|Deducciones'). title: nombre del archivo sin .md ni corchetes; es como se enlaza: [[title]]. content: Markdown completo. Una entidad lleva frontmatter YAML en español ('tipo: persona|lugar|proyecto|concepto|grupo', 'tags: [entidad, persona]', 'estado'), luego '# Nombre', '> [!info] Resumen', '## 🔗 Conexiones' con enlaces a al menos dos notas existentes y '## Memoria de Shadow' con bullets '- **[YYYY-MM-DD]** hecho'. Prohibido: enlaces anidados, enlaces en tags o tipo, y enlaces dentro de código.",
+    input_schema: {
+      type: "object",
+      properties: {
+        folder: { type: "string", description: "Carpeta PARA existente." },
+        title: { type: "string", description: "Nombre de la nota, sin .md." },
+        content: { type: "string", description: "Markdown completo de la nota." },
+      },
+      required: ["folder", "title", "content"],
+    },
+  },
+  {
+    name: "append_to_obsidian_note",
+    description: "Agrega contenido a una nota existente. path acepta la ruta o el nombre de la nota (se resuelve como un [[enlace]]). section: encabezado bajo el que se agrega, comparado sin emojis, acentos ni corchetes (p. ej. 'Memoria de Shadow' o 'Conexiones'); si no existe se crea, y si se omite el contenido va al final. Los hechos van en 'Memoria de Shadow' como '- **[YYYY-MM-DD]** hecho' (nunca crees una segunda sección con ese nombre). Enlaza solo notas existentes y nunca anides enlaces.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Ruta o nombre de la nota." },
+        section: { type: "string", description: "Encabezado de destino (opcional)." },
+        content: { type: "string", description: "Markdown a agregar, normalmente bullets." },
+      },
+      required: ["path", "content"],
+    },
+  },
+  {
+    name: "append_to_daily_note",
+    description: "Escribe en la nota diaria (Diario/YYYY-MM-DD), creándola desde la plantilla si no existe. Los hechos del día nacen aquí y después se propagan a las notas de entidad. section: una sección de la plantilla: '⚡ Qué pasó', '🚀 Trabajo / Cord', '🫀 Cuerpo', '👥 Personas', '🧠 Descarga mental (raw)', '🕵️ Deducciones silenciosas de Shadow' (prefijo '[[Deducción]] —'), '🔁 Propagado a' o '➡️ Mañana'. content: bullets Markdown ('- …'). date: YYYY-MM-DD opcional; por defecto hoy.",
+    input_schema: {
+      type: "object",
+      properties: {
+        section: { type: "string", description: "Sección del diario." },
+        content: { type: "string", description: "Bullets a agregar." },
+        date: { type: "string", description: "Fecha YYYY-MM-DD (opcional)." },
+      },
+      required: ["section", "content"],
+    },
+  },
+  {
     name: "close_daily_log",
-    description: "Guarda el resumen nutricional de hoy en el diario.",
+    description: "Guarda el resumen nutricional de hoy en la sección '🫀 Cuerpo' del diario.",
     input_schema: { type: "object", properties: {} },
   },
   {
@@ -184,7 +222,21 @@ type ToolExecution = {
   failed?: boolean;
   auditStatus?: "completed" | "failed" | "pending" | "no_change";
   auditResult?: unknown;
+  /** Nota real que la herramienta leyó o escribió (para abrirla desde la UI). */
+  notePath?: string;
 };
+
+/** Escrituras en la bóveda con revisión restaurable desde /shadow/memory. */
+const REVERSIBLE_TOOLS = new Set([
+  "remember_personal_context",
+  "create_obsidian_note",
+  "append_to_obsidian_note",
+  "append_to_daily_note",
+  "close_daily_log",
+]);
+
+const NOTE_READ_LIMIT = 6_000;
+const dailyDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Usa una fecha YYYY-MM-DD.");
 
 async function performShadowTool(toolUse: ToolUseBlock): Promise<ToolExecution> {
   try {
@@ -206,7 +258,57 @@ async function performShadowTool(toolUse: ToolUseBlock): Promise<ToolExecution> 
       }
       case "read_obsidian_note": {
         const input = z.object({ filename: z.string().trim().min(1).max(500) }).parse(toolUse.input);
-        return { content: (await readObsidianNote(input.filename)).slice(0, 6_000) };
+        const note = await readVaultNote(input.filename);
+        const truncated = note.content.length > NOTE_READ_LIMIT;
+        return {
+          content: `Ruta: ${note.path}\n\n${note.content.slice(0, NOTE_READ_LIMIT)}${truncated ? "\n[… nota truncada]" : ""}`,
+          notePath: note.path,
+        };
+      }
+      case "create_obsidian_note": {
+        const input = z.object({
+          folder: z.string().trim().min(1).max(300),
+          title: z.string().trim().min(1).max(160),
+          content: z.string().trim().min(1).max(100_000),
+        }).parse(toolUse.input);
+        const result = await createVaultNote(input);
+        return {
+          content: `Nota creada en ${result.path}. Se enlaza como [[${result.title}]]. Confirma a Andre qué escribiste.`,
+          auditResult: result,
+          notePath: result.path,
+        };
+      }
+      case "append_to_obsidian_note": {
+        const input = z.object({
+          path: z.string().trim().min(1).max(1_000),
+          section: z.string().trim().min(1).max(200).optional(),
+          content: z.string().trim().min(1).max(50_000),
+        }).parse(toolUse.input);
+        const result = await appendToVaultNote({ target: input.path, section: input.section, content: input.content });
+        return {
+          content: result.changed
+            ? `Agregado a ${result.path}${input.section ? ` en “${input.section}”` : ""}.`
+            : `${result.path} ya tenía ese contenido; no cambié nada.`,
+          auditStatus: result.changed ? "completed" : "no_change",
+          auditResult: result,
+          notePath: result.path,
+        };
+      }
+      case "append_to_daily_note": {
+        const input = z.object({
+          section: z.string().trim().min(1).max(200),
+          content: z.string().trim().min(1).max(50_000),
+          date: dailyDateSchema.optional(),
+        }).parse(toolUse.input);
+        const result = await appendToDaily(input);
+        return {
+          content: result.changed
+            ? `Agregado al diario ${result.path} en “${input.section}”.`
+            : `El diario ${result.path} ya tenía ese contenido; no cambié nada.`,
+          auditStatus: result.changed ? "completed" : "no_change",
+          auditResult: result,
+          notePath: result.path,
+        };
       }
       case "remember_personal_context": {
         const result = await curateObsidianMemory(toolUse.input);
@@ -218,10 +320,14 @@ async function performShadowTool(toolUse: ToolUseBlock): Promise<ToolExecution> 
       }
       case "close_daily_log": {
         const { totals } = await getDailyMacros();
-        const today = dateKey(new Date(), serverConfig.timezone);
-        const summary = `Resumen del día — ${Math.round(totals.calories)} kcal; ${Math.round(totals.protein)}g proteína; ${Math.round(totals.carbs)}g carbohidratos; ${Math.round(totals.fat)}g grasa; ${totals.water.toFixed(1)}L agua.`;
-        await appendObsidianNote(`Diario/${today}.md`, summary);
-        return { content: `Día cerrado en Diario/${today}.md.` };
+        const line = `- **Nutrición:** ${Math.round(totals.calories)} kcal · ${Math.round(totals.protein)}g proteína · ${Math.round(totals.carbs)}g carbohidratos · ${Math.round(totals.fat)}g grasa · ${totals.water.toFixed(1)}L agua`;
+        const result = await appendToDaily({ section: "🫀 Cuerpo", content: line, replaceLinePrefix: "- **Nutrición:**" });
+        return {
+          content: `Día cerrado en ${result.path}.`,
+          auditStatus: result.changed ? "completed" : "no_change",
+          auditResult: result,
+          notePath: result.path,
+        };
       }
       case "list_directory":
         return { content: await listHomeDirectory(toolUse.input) };
@@ -311,7 +417,7 @@ export async function executeShadowTool(
         : `${toolUse.name} fue procesada.`,
     toolInput: toolUse.input,
     result: result.auditResult ?? { content: result.content.slice(0, 2_000) },
-    reversible: Boolean(result.pendingAction) || toolUse.name === "remember_personal_context",
+    reversible: Boolean(result.pendingAction) || (REVERSIBLE_TOOLS.has(toolUse.name) && !result.failed),
   });
   return result;
 }

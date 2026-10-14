@@ -14,6 +14,8 @@ export type ShadowSource = {
   /** Solo para fuentes web; las internas no tienen URL pública. */
   url?: string;
   domain?: ShadowDomain;
+  /** Ruta (o nombre) de la nota de la bóveda, para abrirla desde la UI. */
+  notePath?: string;
 };
 
 const MAX_SOURCES = 8;
@@ -41,6 +43,15 @@ const ACTION_LABEL: Record<string, string> = {
 
 /** Mantenimiento invisible: nunca se anuncia como fuente. */
 const SILENT_TOOLS = new Set(["remember_personal_context"]);
+
+/** Herramientas que escriben en la bóveda (la UI refresca el explorador). */
+export const NOTE_WRITE_TOOLS = new Set([
+  "remember_personal_context",
+  "create_obsidian_note",
+  "append_to_obsidian_note",
+  "append_to_daily_note",
+  "close_daily_log",
+]);
 
 function text(value: unknown, max = 120): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined;
@@ -84,7 +95,25 @@ export function sourceFromToolUse(name: string, input: unknown): ShadowSource | 
   if (name === "read_obsidian_note") {
     const filename = text(fields.filename, 500);
     if (!filename) return null;
-    return { id: `note:${filename}`, kind: "note", label: noteTitle(filename), detail: "Nota de Obsidian" };
+    return { id: `note:${filename}`, kind: "note", label: noteTitle(filename), detail: "Nota de Obsidian", notePath: filename };
+  }
+  if (name === "create_obsidian_note") {
+    const title = text(fields.title, 200);
+    if (!title) return null;
+    const folder = text(fields.folder, 300);
+    const notePath = folder ? `${folder}/${title}.md` : title;
+    return { id: `note-edit:${notePath}`, kind: "note", label: noteTitle(title), detail: "Nota creada", notePath };
+  }
+  if (name === "append_to_obsidian_note") {
+    const target = text(fields.path, 1_000);
+    if (!target) return null;
+    const section = text(fields.section, 80);
+    return { id: `note-edit:${target}`, kind: "note", label: noteTitle(target), detail: section ? `Agregado en ${section}` : "Nota actualizada", notePath: target };
+  }
+  if (name === "append_to_daily_note") {
+    const date = text(fields.date, 10);
+    const section = text(fields.section, 80);
+    return { id: `note-edit:diario:${date ?? "hoy"}`, kind: "note", label: date ? `Diario ${date}` : "Diario de hoy", detail: section ? `Agregado en ${section}` : "Diario actualizado", notePath: date };
   }
   if (name === "search_web") {
     const query = text(fields.query);
@@ -142,6 +171,15 @@ export function toolStepLabel(name: string, input: unknown): string | null {
     const filename = text(fields.filename, 500);
     return filename ? `Leyendo ${noteTitle(filename)}` : "Leyendo una nota";
   }
+  if (name === "create_obsidian_note") {
+    const title = text(fields.title, 200);
+    return title ? `Creando ${noteTitle(title)}` : "Creando una nota";
+  }
+  if (name === "append_to_obsidian_note") {
+    const target = text(fields.path, 1_000);
+    return target ? `Escribiendo en ${noteTitle(target)}` : "Escribiendo en una nota";
+  }
+  if (name === "append_to_daily_note") return "Escribiendo en el diario";
   if (name === "search_web") {
     const query = text(fields.query, 60);
     return query ? `Buscando en la web: “${query}”` : "Buscando en la web";

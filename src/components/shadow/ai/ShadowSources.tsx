@@ -50,7 +50,7 @@ function SourceIcon({ source, className }: { source: ShadowSource; className?: s
  * foco, y se cierra con Escape: una vista previa solo con hover no sirve con
  * teclado ni en táctil.
  */
-export function ShadowCitation({ source, index }: { source: ShadowSource; index: number }) {
+export function ShadowCitation({ source, index, onOpenNote }: { source: ShadowSource; index: number; onOpenNote?: (notePath: string) => void }) {
   const reduced = useReducedMotion() ?? false;
   const [open, setOpen] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,6 +116,18 @@ export function ShadowCitation({ source, index }: { source: ShadowSource; index:
                 Abrir fuente <ArrowUpRight className="h-3 w-3" />
               </a>
             ) : null}
+            {source.kind === "note" && source.notePath && onOpenNote ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onOpenNote(source.notePath as string);
+                }}
+                className="mt-2.5 inline-flex items-center gap-1 text-[9px] text-white/45 transition-colors hover:text-white"
+              >
+                Abrir nota <ArrowUpRight className="h-3 w-3" />
+              </button>
+            ) : null}
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -127,7 +139,16 @@ export function ShadowCitation({ source, index }: { source: ShadowSource; index:
  * Lo que Shadow consultó para responder. Plegado a tres chips y un "+n":
  * la procedencia tiene que estar disponible, no competir con la respuesta.
  */
-export function ShadowSources({ sources, className = "" }: { sources: ShadowSource[]; className?: string }) {
+export function ShadowSources({
+  sources,
+  className = "",
+  onOpenNote,
+}: {
+  sources: ShadowSource[];
+  className?: string;
+  /** Si se pasa, las fuentes de notas ofrecen "Abrir nota". */
+  onOpenNote?: (notePath: string) => void;
+}) {
   const reduced = useReducedMotion() ?? false;
   const [expanded, setExpanded] = useState(false);
   if (sources.length === 0) return null;
@@ -147,7 +168,7 @@ export function ShadowSources({ sources, className = "" }: { sources: ShadowSour
             exit={{ opacity: 0, scale: 0.9 }}
             transition={reduced ? { duration: 0 } : { ...SPRING, delay: expanded ? (index - VISIBLE_LIMIT) * 0.03 : 0 }}
           >
-            <ShadowCitation source={source} index={index + 1} />
+            <ShadowCitation source={source} index={index + 1} onOpenNote={onOpenNote} />
           </motion.span>
         ))}
       </AnimatePresence>

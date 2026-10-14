@@ -108,9 +108,11 @@ export async function runShadowConversation(
         const source = sourceFromToolUse(toolUse.name, toolUse.input);
         if (source) sources.push(source);
         const label = toolStepLabel(toolUse.name, toolUse.input);
-        if (label) emit({ type: "step", step: { id: toolUse.id, label } });
+        if (label) emit({ type: "step", step: { id: toolUse.id, label, tool: toolUse.name } });
         const result = await executeShadowTool(toolUse, context);
         if (label) emit({ type: "step_done", id: toolUse.id, ok: !result.failed });
+        // La fuente apunta a la nota real (un nombre puede resolverse a otra ruta).
+        if (source && result.notePath) source.notePath = result.notePath;
         pendingAction = result.pendingAction ?? pendingAction;
         toolResults.push({
           type: "tool_result",

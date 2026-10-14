@@ -15,7 +15,7 @@ Shadow is the core intelligent agent of ValleOS. It operates as the user's alter
 ## Continuous Learning & Proactivity (El Demonio)
 Shadow implementa un bucle activo de retroalimentación y autonomía constante a través de su Demonio (`npm run daemon`):
 - **Master Rule File:** Reads from `900 - Sistema/Directivas de Shadow.md` on every interaction.
-- **Auto-Programming:** If the user corrects Shadow's behavior, Shadow silently executes `append_obsidian_note` to inject this new rule into its Directivas file.
+- **Auto-Programming:** If the user corrects Shadow's behavior, Shadow silently executes `remember_personal_context` (kind `preference`) to add a dated bullet to its Directivas file.
 - **Proactive Heartbeat & Cron Jobs:** A background Node process (`scripts/daemon.ts`) wakes up every 2 hours (8 AM - 10 PM) to analyze the context. If urgent actions are required (e.g., missing macros, important notes), Shadow pushes a native macOS notification and sends a WhatsApp message.
 - **WhatsApp Integration:** Shadow is connected to a dedicated WhatsApp group ("Shadow") via `whatsapp-web.js`. The user can chat with him remotely from their phone, and Shadow will execute database operations or Obsidian writes in the host machine seamlessly.
 
@@ -32,7 +32,7 @@ Shadow leverages a deeply interconnected Zettelkasten system for context retriev
 - **MOCs (Maps of Content):** Primary indices like `000 - Index (MOC Principal).md` route the knowledge.
 - **Status Board:** `001 - Status Board.md` serves as the real-time hub.
 - **Entity Metadata:** Every person and concept uses standardized YAML and `## 🔗 Conexiones` blocks.
-- **Diary Metrics:** Shadow analyzes the daily templates (`900 - Sistema/Plantillas/Diario.md`).
+- **Diary Metrics:** Shadow analyzes the daily templates (`900 - Sistema/Plantillas/Plantilla Diario.md` (ruta real en `.obsidian/daily-notes.json`)).
 - **Semantic Index:** Notes are split into durable chunks enriched with summaries and concepts for hybrid retrieval.
 - **Life Graph:** Named entities and relations are stored independently from the notes so Shadow can connect facts across sources.
 - **Safe Consolidation:** Duplicate, conflicting, or stale memories become review proposals; they are never destructively merged in the background.
@@ -43,14 +43,20 @@ Shadow leverages a deeply interconnected Zettelkasten system for context retriev
 - El modo `observe` sólo analiza; `assist` entrega notificaciones y solicita aprobaciones; `autonomous` ejecuta únicamente los permisos habilitados.
 - Correos, WhatsApp y eventos de calendario se preparan como trabajos durables. Shadow nunca afirma que fueron enviados antes de que el worker registre el resultado.
 
-## Tool Execution Flow (Backend, System & Web)
-Shadow can execute backend tasks, native macOS commands, and browse the web autonomously:
-1. `run_terminal_command`: Executes bash/zsh commands directly on the host Mac via `child_process.execSync`, allowing file manipulation and system queries.
-2. `search_web` & `read_url`: Surfs the internet using DuckDuckGo to answer current-event questions and extracts clean text using Cheerio.
-3. `log_food`: Parses food descriptions, calculates macros, and inserts into DB.
-4. `search_obsidian`: Retrieves context from the user's Second Brain.
-5. `append_obsidian_note`: Creates memories or updates its own rules.
-6. `close_daily_log`: Compiles daily metrics and exports them to a daily note in Obsidian.
+## Herramientas (`src/features/shadow/tools.ts`)
+- **Datos:** `add_expense`, `log_food`, `close_daily_log` (escribe `- **Nutrición:** …` en “🫀 Cuerpo” del diario y reemplaza la línea si ya existía).
+- **Bóveda, lectura:** `search_obsidian`; `read_obsidian_note` acepta ruta o nombre de nota (se resuelve como un `[[enlace]]`: nombre, alias, sin acentos).
+- **Bóveda, memoria silenciosa:** `remember_personal_context` (`curateObsidianMemory`). Encuentra o crea la entidad con el formato del Protocolo de Conexiones (`tipo`, `tags: [entidad, …]`, resumen, `## 🔗 Conexiones`, `## Memoria de Shadow`), agrega `- **[YYYY-MM-DD]** hecho ([[YYYY-MM-DD|diario]])` al final de la única sección de memoria (acepta `## Memoria de [[Shadow]]`), enlaza entidades relacionadas con su nombre real y lista la nota en “🔁 Propagado a” del diario. Nunca se anuncia.
+- **Bóveda, escrituras visibles:** `create_obsidian_note { folder, title, content }` (solo carpetas PARA reales; falla si la nota existe; valida enlaces anidados, enlaces en `tags`/`tipo`/código y claves en español), `append_to_obsidian_note { path, section?, content }` y `append_to_daily_note { section, content, date? }`. Shadow confirma lo que escribió.
+- **Archivos y web:** `list_directory`, `create_directory`, `move_path` (con aprobación), `search_web`, `read_url`.
+- **Acciones con aprobación:** `add_calendar_event`, `draft_email`, `send_email`, `send_whatsapp_message`.
+- Toda escritura en la bóveda deja una `ObsidianRevision` (una creación se revierte borrando la nota) y la auditoría la marca como reversible; se restaura desde `/shadow/memory`. Las reglas viven en `src/features/vault/conventions.ts` y las escrituras en `src/features/vault/shadow-writes.ts`.
+
+## Chat sobre la nota abierta
+- `ShadowNotePanel` (barra derecha de la bóveda) usa `useShadowChat` con la conversación `vault` y envía `notePath` en cada mensaje.
+- `runShadowTurn` lee la nota (hasta ~8.000 caracteres) y la agrega al bloque por mensaje dentro de `<open_note>`, como dato no confiable; nunca entra en `SHADOW_INSTRUCTIONS`.
+- Los pasos del stream incluyen `tool`; tras escribir en la bóveda el panel llama `refreshVault()`. Las fuentes de notas llevan `notePath` para abrirlas.
+- La captura rápida del dashboard (`captureToDaily`) escribe `- HH:mm texto` en “🧠 Descarga mental (raw)” del diario.
 
 ## Respuestas en vivo (streaming)
 - `runShadowTurn` (`src/features/shadow/turn.ts`) es el único camino de un turno: guarda el mensaje, carga contexto, corre el orquestador y persiste la respuesta. `askShadow` (acción de servidor, voz y daemon) y `POST /api/shadow/stream` lo usan igual.

@@ -1,13 +1,14 @@
-import { getRecentNotes } from "@/app/actions/obsidian";
-import ObsidianDashboard from "@/components/obsidian/ObsidianDashboard";
+import { Suspense } from "react";
+import VaultApp from "@/components/vault/VaultApp";
 
 export const dynamic = "force-dynamic";
 
-export default async function ObsidianPage() {
-  // Sin vault (OBSIDIAN_VAULT_PATH vacío, p. ej. en Vercel) la página carga vacía en vez de romper.
-  const notes = await getRecentNotes(12).catch((error: unknown) => {
-    console.error("Obsidian vault unavailable:", error);
-    return [];
-  });
-  return <ObsidianDashboard initialNotes={notes} />;
+export default function ObsidianPage() {
+  return (
+    <div className="h-[calc(100dvh-11rem)] min-h-[520px] md:h-[calc(100dvh-7.25rem)]">
+      <Suspense fallback={<div className="os-surface h-full rounded-[22px]" />}>
+        <VaultApp />
+      </Suspense>
+    </div>
+  );
 }

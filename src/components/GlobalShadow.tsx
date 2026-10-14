@@ -18,7 +18,8 @@ export default function GlobalShadow() {
   const voice = useShadowVoice();
 
   // Don't show the global floating orb if we are already on the dedicated /shadow page
-  if (pathname === '/shadow') return null;
+  // En /obsidian Shadow vive en el panel derecho de la bóveda.
+  if (pathname === '/shadow' || pathname === '/obsidian') return null;
 
   const isExpanded = isHovered || isFocused || inputValue.length > 0;
   const orbStatus: ShadowStatus = voice.phase === "listening" ? "listening" : voice.phase === "processing" ? "thinking" : voice.phase === "speaking" ? "speaking" : inputValue ? "listening" : "idle";

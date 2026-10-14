@@ -17,6 +17,16 @@ describe("shadow sources", () => {
     expect(web).toMatchObject({ kind: "web", label: "example.com", url: "https://www.example.com/a" });
   });
 
+  it("las notas escritas llevan su ruta para abrirlas", () => {
+    expect(sourceFromToolUse("create_obsidian_note", { folder: "500 - Entidades/Personas", title: "Marco", content: "x" }))
+      .toMatchObject({ kind: "note", label: "Marco", detail: "Nota creada", notePath: "500 - Entidades/Personas/Marco.md" });
+    expect(sourceFromToolUse("append_to_obsidian_note", { path: "Sofi", section: "Memoria de Shadow", content: "x" }))
+      .toMatchObject({ kind: "note", label: "Sofi", notePath: "Sofi" });
+    expect(sourceFromToolUse("append_to_daily_note", { section: "⚡ Qué pasó", content: "x" }))
+      .toMatchObject({ kind: "note", label: "Diario de hoy" });
+    expect(sourceFromToolUse("read_obsidian_note", { filename: "Jerry (UP)" })?.notePath).toBe("Jerry (UP)");
+  });
+
   it("descarta URLs que no son http", () => {
     expect(sourceFromToolUse("read_url", { url: "javascript:alert(1)" })).toBeNull();
   });
@@ -36,6 +46,8 @@ describe("shadow step labels", () => {
     expect(toolStepLabel("search_web", { query: "clima" })).toBe("Buscando en la web: “clima”");
     expect(toolStepLabel("add_expense", { amount: 1 })).toBe("Registrando gasto");
     expect(toolStepLabel("remember_personal_context", {})).toBeNull();
+    expect(toolStepLabel("append_to_obsidian_note", { path: "100 - Proyectos/Cord.md" })).toBe("Escribiendo en Cord");
+    expect(toolStepLabel("append_to_daily_note", { section: "x" })).toBe("Escribiendo en el diario");
     expect(toolStepLabel("algo_nuevo", {})).toBe("Usando herramientas");
   });
 

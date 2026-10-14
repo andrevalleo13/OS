@@ -8,7 +8,13 @@ export type ShadowStreamHandlers = {
   onReset?: () => void;
 };
 
-type ShadowTurnInput = { message: string; conversationKey: string; channel?: "dashboard" | "whatsapp" | "system" };
+export type ShadowTurnInput = {
+  message: string;
+  conversationKey: string;
+  channel?: "dashboard" | "whatsapp" | "system";
+  /** Nota abierta en el editor de la bóveda: Shadow la recibe como contexto. */
+  notePath?: string | null;
+};
 
 /** Parte un flujo NDJSON en eventos, tolerando líneas cortadas entre fragmentos. */
 export function createNdjsonParser(onEvent: (event: ShadowStreamEvent) => void) {

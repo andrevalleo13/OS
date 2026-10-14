@@ -4,7 +4,8 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { BrainCircuit, ChevronRight, Plus } from "lucide-react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { appendObsidianNote, getRecentNotes } from "@/app/actions/obsidian";
+import { getRecentNotes } from "@/app/actions/obsidian";
+import { captureToDaily } from "@/app/actions/vault-capture";
 import type { DashboardNote } from "@/components/dashboard/types";
 import { WidgetCard, useWidget } from "@/components/ui/widget";
 import { useDashboardShortcut } from "@/hooks/useDashboardShortcut";
@@ -36,10 +37,10 @@ export default function QuickNotesWidget({ initialNotes }: { initialNotes: Dashb
     setMessage("");
     startTransition(async () => {
       try {
-        await appendObsidianNote("Inbox.md", content, "Dashboard");
+        await captureToDaily(content);
         setNote("");
         setNotes(await getRecentNotes(5));
-        setMessage("Guardado en Inbox.");
+        setMessage("Guardado en el diario de hoy.");
       } catch {
         setMessage("No se pudo guardar la nota.");
       }
@@ -58,7 +59,7 @@ export default function QuickNotesWidget({ initialNotes }: { initialNotes: Dashb
 
         <form data-no-expand onSubmit={submit} className="relative mt-5">
           <label htmlFor="quick-note" className="sr-only">Nota rápida</label>
-          <input id="quick-note" ref={inputRef} value={note} onChange={(event) => setNote(event.target.value)} maxLength={100_000} placeholder="Captura una idea en Inbox…" className="h-11 w-full rounded-xl border border-white/[0.075] bg-white/[0.025] pl-3 pr-11 text-xs outline-none transition placeholder:text-white/20 focus:border-white/[0.16]" />
+          <input id="quick-note" ref={inputRef} value={note} onChange={(event) => setNote(event.target.value)} maxLength={20_000} placeholder="Captura una idea en el diario…" className="h-11 w-full rounded-xl border border-white/[0.075] bg-white/[0.025] pl-3 pr-11 text-xs outline-none transition placeholder:text-white/20 focus:border-white/[0.16]" />
           <button disabled={!note.trim() || isPending} className="absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.07] hover:text-white/70 active:scale-95 disabled:opacity-20" aria-label="Guardar nota"><Plus className="h-3.5 w-3.5" /></button>
         </form>
         <p aria-live="polite" className="mt-2 min-h-4 text-[9px] text-white/30">{isPending ? "Guardando…" : message}</p>
@@ -66,7 +67,7 @@ export default function QuickNotesWidget({ initialNotes }: { initialNotes: Dashb
         <div className="mt-2 flex-1 divide-y divide-white/[0.05] overflow-y-auto border-t border-white/[0.05]">
           {visibleNotes.length === 0 ? <div className="flex min-h-28 items-center justify-center text-xs text-white/25">Tu bóveda aún no tiene notas recientes.</div> : visibleNotes.map((item, index) => (
             <motion.div key={item.name} layout initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.04 }} className="py-3">
-              <div className="flex items-center justify-between gap-3"><p className="truncate text-[11px] text-white/60">{noteTitle(item.name)}</p><span className="shrink-0 font-mono text-[8px] uppercase tracking-wider text-white/18">Reciente</span></div>
+              <Link href={`/obsidian?note=${encodeURIComponent(item.name)}`} data-no-expand className="group flex items-center justify-between gap-3"><p className="truncate text-[11px] text-white/60 transition group-hover:text-white">{noteTitle(item.name)}</p><span className="shrink-0 font-mono text-[8px] uppercase tracking-wider text-white/18 transition group-hover:text-white/45">Abrir</span></Link>
               <AnimatePresence initial={false}>{isExpanded && <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-2 line-clamp-3 text-[10px] leading-relaxed text-white/30">{item.content.replace(/^---[\s\S]*?---/, "").trim() || "Nota sin contenido visible."}</motion.p>}</AnimatePresence>
             </motion.div>
           ))}

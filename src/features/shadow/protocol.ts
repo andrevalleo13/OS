@@ -22,6 +22,8 @@ export type ShadowResult = {
 export type ShadowStep = {
   id: string;
   label: string;
+  /** Herramienta que ejecuta este paso (ausente en la carga de contexto). */
+  tool?: string;
 };
 
 export type ShadowStreamEvent =
