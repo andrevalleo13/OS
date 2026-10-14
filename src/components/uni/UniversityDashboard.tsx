@@ -1,258 +1,182 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { containerVariants, itemVariants } from "@/lib/animations";
-import { Calculator, Clock, AlertCircle, Terminal } from "lucide-react";
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from "recharts";
-// Calculator is now pure math, no server action needed
+import Link from "next/link";
+import { motion, MotionConfig } from "framer-motion";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { RotateCw, Unplug } from "lucide-react";
+import type { RiskLevel, UniOverview, UniSubject } from "@/features/uni/types";
+import AbsencesCard from "./AbsencesCard";
+import AssignmentsPanel from "./AssignmentsPanel";
+import BalanceChart from "./BalanceChart";
+import ExamTimeline from "./ExamTimeline";
+import FinalsCard from "./FinalsCard";
+import HeroNextExam from "./HeroNextExam";
+import ScholarshipCard from "./ScholarshipCard";
+import StudyQueue from "./StudyQueue";
+import SubjectList, { type SubjectSort } from "./SubjectList";
+import { ago, dayMonth, noteHref, weekdayLong } from "./format";
+import { cx, PulseDot, rise, stagger } from "./primitives";
 
-export default function UniversityDashboard({ courses, assignments }: { courses: any[], assignments: any[] }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+const RISK_ORDER: RiskLevel[] = ["bajo", "medio", "alto", "critico"];
 
-  // Semester Progress calculations
-  const semStart = new Date("2026-08-01").getTime();
-  const semEnd = new Date("2026-12-15").getTime();
-  const now = new Date().getTime();
-  const semProgress = Math.min(Math.max(((now - semStart) / (semEnd - semStart)) * 100, 0), 100);
-
-  // Radar Data
-  const radarData = courses.map(c => ({
-    subject: c.name.substring(0, 15) + (c.name.length > 15 ? '...' : ''),
-    grade: c.currentGrade || 0,
-    fullMark: 100,
-  }));
-
-  // Assignments Matrix
-  const pendingAssignments = assignments.filter(a => a.status !== "done").sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-
-  return (
-    <motion.div 
-      className="flex flex-col gap-8 w-full max-w-7xl mx-auto pb-24"
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
-      {/* Semester progress */}
-      <motion.div variants={itemVariants} className="flex flex-col gap-4 border-b border-[#222] pb-6">
-        <div className="flex flex-col gap-2">
-          <div className="flex justify-between text-[10px] font-mono text-gray-400">
-            <span>Inicio de Semestre (Ago)</span>
-            <span>Progreso Total: {semProgress.toFixed(1)}%</span>
-            <span>Finales (Dic)</span>
-          </div>
-          <div className="w-full h-[2px] bg-[#111] rounded-full overflow-hidden relative">
-            <motion.div 
-              className="absolute top-0 left-0 bottom-0 bg-white"
-              initial={{ width: 0 }}
-              animate={{ width: `${semProgress}%` }}
-              transition={{ duration: 1.5, ease: "easeOut" }}
-            />
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Col: Radar & Shadow Tutor */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
-          {/* Performance Radar */}
-          <motion.div variants={itemVariants} className="bg-[#000] border border-[#111] rounded-xl p-5 flex flex-col items-center">
-            <h3 className="text-[10px] text-gray-500 font-mono uppercase tracking-widest w-full text-left mb-2">Radar de Desempeño</h3>
-            <div className="w-full h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                  <PolarGrid stroke="#222" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#888', fontSize: 9, fontFamily: 'monospace' }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar name="GPA" dataKey="grade" stroke="#fff" fill="#ffffff" fillOpacity={0.1} />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </motion.div>
-
-          {/* Shadow Tutor */}
-          <motion.div variants={itemVariants} className="bg-[#000] border border-[#111] rounded-xl p-5 relative overflow-hidden group">
-            <div className="flex items-center gap-2 mb-4">
-              <Calculator className="w-4 h-4 text-white/45" />
-              <h3 className="text-[10px] text-white/45 font-mono uppercase tracking-widest">Calculadora de Calificaciones</h3>
-            </div>
-            <GradeCalculator courses={courses} />
-          </motion.div>
-        </div>
-
-        {/* Right Col: Course Grid & Matrix */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          
-          {/* Courses Grid */}
-          <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {courses.map(course => {
-              const maxAbsences = course.maxAbsences || 6;
-              const absences = course.absences || 0;
-              const isDanger = absences >= maxAbsences;
-              const isWarning = absences >= maxAbsences - 1;
-
-              return (
-                <div 
-                  key={course.id} 
-                  className={`bg-[#000] border ${isDanger ? 'border-white/20 shadow-[0_0_15px_rgba(255,255,255,0.04)]' : 'border-[#111] hover:border-[#333]'} rounded-xl p-4 flex flex-col gap-3 transition-all relative overflow-hidden group`}
-                >
-                  <div className="absolute left-0 top-0 h-full w-[2px] bg-white/45 opacity-50 transition-opacity group-hover:opacity-100" />
-                  
-                  <div className="flex justify-between items-start pl-2">
-                    <div className="flex flex-col">
-                      <span className="text-sm text-gray-200 font-medium">{course.name}</span>
-                      <span className="text-[10px] text-gray-500 font-mono mt-1">{course.professor}</span>
-                    </div>
-                    <span className="font-mono text-lg tracking-tighter text-white/70">{course.currentGrade}%</span>
-                  </div>
-                  
-                  {/* Absences Dot Track */}
-                  <div className="pl-2 flex flex-col gap-1.5 mt-2">
-                    <div className="flex justify-between items-center">
-                      <span className={`text-[9px] font-mono uppercase tracking-widest ${isDanger ? 'text-white/75' : isWarning ? 'text-white/55' : 'text-gray-600'}`}>
-                        Faltas ({absences}/{maxAbsences})
-                      </span>
-                      {isDanger && <AlertCircle className="h-3 w-3 text-white/75" />}
-                    </div>
-                    <div className="flex gap-1">
-                      {Array.from({ length: maxAbsences }).map((_, i) => (
-                        <div 
-                          key={i} 
-                          className={`h-1 flex-1 rounded-full ${i < absences ? (isDanger ? 'bg-white/70 shadow-[0_0_5px_rgba(255,255,255,0.2)]' : 'bg-white/45') : 'bg-[#1a1a1a]'}`} 
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pl-2 mt-2 flex items-center gap-2 text-[10px] text-gray-500 font-mono pt-3 border-t border-[#111]">
-                    <Clock className="w-3 h-3" />
-                    {course.schedule}
-                  </div>
-                </div>
-              );
-            })}
-          </motion.div>
-
-          {/* Kanban Matrix */}
-          <motion.div variants={itemVariants} className="bg-[#000] border border-[#111] rounded-xl p-5 flex flex-col flex-1">
-            <div className="flex items-center gap-2 mb-6">
-              <Terminal className="w-4 h-4 text-gray-500" />
-              <h3 className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">Matriz de Entregables</h3>
-            </div>
-            
-            <div className="flex flex-col gap-3">
-              {pendingAssignments.length === 0 ? (
-                <div className="text-xs text-gray-600 font-mono text-center py-8">No hay entregas pendientes.</div>
-              ) : (
-                pendingAssignments.map(assignment => {
-                  const hoursUntil = (new Date(assignment.dueDate).getTime() - now) / 36e5;
-                  const isUrgent = hoursUntil <= 48 && hoursUntil > 0;
-                  const isOverdue = hoursUntil <= 0;
-                  
-                  return (
-                    <div 
-                      key={assignment.id} 
-                      className={`flex items-center justify-between p-3 rounded-lg border ${isUrgent ? 'border-white/15 bg-white/[0.035]' : isOverdue ? 'border-white/20 bg-white/[0.045]' : 'border-[#1a1a1a] bg-[#111]/50'} transition-colors`}
-                    >
-                      <div className="flex flex-col gap-1">
-                        <span className={`text-xs font-medium ${isUrgent ? 'text-white/80' : isOverdue ? 'text-white/70' : 'text-gray-300'}`}>
-                          {assignment.title}
-                        </span>
-                        <span className="text-[9px] font-mono text-gray-500">
-                          {assignment.course.name} • Vale {assignment.weight}%
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[10px] font-mono ${isUrgent ? 'text-white/55' : 'text-gray-500'}`}>
-                          {mounted ? new Date(assignment.dueDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : "..."}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
-
-        </div>
-      </div>
-    </motion.div>
-  );
+function sortSubjects(subjects: UniSubject[], sort: SubjectSort): UniSubject[] {
+  if (sort === "fecha") return subjects;
+  const list = [...subjects];
+  if (sort === "riesgo") {
+    return list.sort((a, b) => RISK_ORDER.indexOf(b.risk.level) - RISK_ORDER.indexOf(a.risk.level) || (b.neededForThreshold ?? 0) - (a.neededForThreshold ?? 0));
+  }
+  return list.sort((a, b) => (a.current ?? 11) - (b.current ?? 11) || a.name.localeCompare(b.name, "es"));
 }
 
-function GradeCalculator({ courses }: { courses: any[] }) {
-  const [courseId, setCourseId] = useState(courses[0]?.id || "");
-  const [target, setTarget] = useState("90");
-  const [remaining, setRemaining] = useState("100");
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && (window.matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.reducedMotion === "true");
+}
 
-  const course = courses.find(c => c.id === courseId);
-  const currentGrade = course?.currentGrade || 0;
-  const targetNum = parseFloat(target) || 0;
-  const remainingNum = parseFloat(remaining) || 0;
+export default function UniversityDashboard({ overview }: { overview: UniOverview }) {
+  const router = useRouter();
+  const [sort, setSort] = useState<SubjectSort>("fecha");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [refreshing, startRefresh] = useTransition();
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>());
+  const subjects = useMemo(() => sortSubjects(overview.subjects, sort), [overview.subjects, sort]);
+  const subjectsRef = useRef(subjects);
+  const focusedRef = useRef(focusedId);
+  const expandedRef = useRef(expandedId);
 
-  // Matemática pura: ¿cuánto necesitas sacar en lo que falta?
-  const requiredGrade = remainingNum > 0 
-    ? (targetNum - (currentGrade * (100 - remainingNum) / 100)) / (remainingNum / 100)
-    : 0;
+  useEffect(() => {
+    subjectsRef.current = subjects;
+    focusedRef.current = focusedId;
+    expandedRef.current = expandedId;
+  }, [subjects, focusedId, expandedId]);
 
-  const isPossible = requiredGrade <= 100;
-  const isEasy = requiredGrade < 70;
-  const alreadyPassed = requiredGrade <= 0;
+  const registerRef = useCallback((id: string, element: HTMLButtonElement | null) => {
+    if (element) rowRefs.current.set(id, element);
+    else rowRefs.current.delete(id);
+  }, []);
+
+  const toggle = useCallback((id: string) => {
+    const opening = expandedRef.current !== id;
+    setExpandedId(opening ? id : null);
+    setFocusedId(id);
+    // Tras la animación de altura, deja el detalle a la vista sin saltos.
+    if (opening) window.setTimeout(() => document.getElementById(`materia-${id}`)?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" }), 320);
+  }, []);
+
+  const openSubject = useCallback((id: string) => {
+    setExpandedId(id);
+    setFocusedId(id);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`materia-${id}`)?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+      rowRefs.current.get(id)?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  // Navegación de teclado: J/K entre materias, Enter (nativo del botón) abre, O abre la nota, Esc cierra.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [cmdk-root]")) return;
+      const key = event.key.toLowerCase();
+      const list = subjectsRef.current;
+      if (!list.length) return;
+      if (key === "escape") {
+        if (expandedRef.current) setExpandedId(null);
+        return;
+      }
+      if (key !== "j" && key !== "k" && key !== "o") return;
+      const index = list.findIndex((subject) => subject.id === focusedRef.current);
+      if (key === "o") {
+        const subject = list[index];
+        if (subject?.notePath) {
+          event.preventDefault();
+          router.push(noteHref(subject.notePath));
+        }
+        return;
+      }
+      event.preventDefault();
+      const nextIndex = key === "j" ? (index === -1 ? 0 : Math.min(list.length - 1, index + 1)) : (index === -1 ? 0 : Math.max(0, index - 1));
+      const id = list[nextIndex].id;
+      setFocusedId(id);
+      const element = rowRefs.current.get(id);
+      element?.focus({ preventScroll: true });
+      element?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
+
+  const nextSubject = overview.nextExam ? overview.subjects.find((subject) => subject.id === overview.nextExam?.subjectId) ?? null : null;
+  const refresh = () => startRefresh(() => router.refresh());
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <label className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">Materia</label>
-        <select 
-          value={courseId} 
-          onChange={e => setCourseId(e.target.value)}
-          className="bg-[#0a0a0a] border border-[#1a1a1a] text-gray-300 text-xs rounded-lg p-2 focus:outline-none focus:border-[#333] transition-colors"
-        >
-          {courses.map(c => <option key={c.id} value={c.id}>{c.name} ({c.currentGrade}%)</option>)}
-        </select>
-      </div>
-      <div className="flex gap-3">
-        <div className="flex flex-col gap-1 flex-1">
-          <label className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">Quiero sacar</label>
-          <input 
-            type="number" 
-            value={target}
-            onChange={e => setTarget(e.target.value)}
-            className="bg-[#0a0a0a] border border-[#1a1a1a] text-gray-300 text-xs rounded-lg p-2 focus:outline-none focus:border-[#333] transition-colors"
-            placeholder="90"
+    <MotionConfig reducedMotion="user">
+      <motion.main variants={stagger} initial="hidden" animate="visible" className="os-page mx-auto grid w-full max-w-[1400px] grid-cols-12 gap-3 pb-10 md:gap-4">
+        <motion.div variants={rise} className="col-span-12 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10px] text-white/35">
+            <span className="flex items-center gap-2 text-white/60">
+              <PulseDot />
+              <span className="capitalize">{weekdayLong(overview.today)}</span> {dayMonth(overview.today)}
+            </span>
+            <span className="text-white/15">/</span>
+            {overview.vault.available && overview.vault.notePath ? (
+              <Link href={noteHref(overview.vault.notePath)} className="transition hover:text-white">
+                Bóveda en vivo · editada {overview.vault.updatedAt ? ago(overview.vault.updatedAt, overview.generatedAt) : ""}
+              </Link>
+            ) : (
+              <span>Bóveda no disponible</span>
+            )}
+            <span className="text-white/15">/</span>
+            <span>Base {overview.db.available ? "en línea" : "sin conexión"}</span>
+          </div>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={refreshing}
+            className="inline-flex h-7 items-center gap-1.5 rounded-[9px] border border-white/[0.07] px-2.5 font-mono text-[10px] text-white/45 transition hover:border-white/20 hover:text-white active:scale-[0.97] disabled:opacity-60"
+          >
+            <RotateCw className={cx("h-3 w-3", refreshing && "animate-spin")} />
+            {refreshing ? "Leyendo…" : "Releer bóveda"}
+          </button>
+        </motion.div>
+
+        {!overview.vault.available && (
+          <motion.div variants={rise} className="col-span-12 flex items-start gap-3 rounded-[16px] border border-dashed border-white/[0.12] px-4 py-3">
+            <Unplug className="mt-0.5 h-3.5 w-3.5 shrink-0 text-white/40" />
+            <p className="text-[11.5px] leading-relaxed text-white/50">
+              {overview.vault.reason ?? "La bóveda no está disponible."} Mostrando solo lo que hay en la base de datos{overview.db.available ? "" : " (que tampoco respondió)"}.
+            </p>
+          </motion.div>
+        )}
+
+        <HeroNextExam overview={overview} subject={nextSubject} onOpenSubject={openSubject} className="col-span-12 lg:col-span-6" />
+        <ScholarshipCard overview={overview} className="col-span-12 md:col-span-6 lg:col-span-3" />
+        <AbsencesCard overview={overview} onOpenSubject={openSubject} className="col-span-12 md:col-span-6 lg:col-span-3" />
+
+        <ExamTimeline overview={overview} onOpenSubject={openSubject} className="col-span-12" />
+
+        <div className="col-span-12 flex min-w-0 flex-col gap-3 md:gap-4 xl:col-span-8">
+          <SubjectList
+            subjects={subjects}
+            threshold={overview.scholarship.threshold}
+            sort={sort}
+            onSort={setSort}
+            expandedId={expandedId}
+            focusedId={focusedId}
+            onToggle={toggle}
+            onFocus={setFocusedId}
+            registerRef={registerRef}
           />
+          <AssignmentsPanel overview={overview} />
         </div>
-        <div className="flex flex-col gap-1 flex-1">
-          <label className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">% que falta</label>
-          <input 
-            type="number" 
-            value={remaining}
-            onChange={e => setRemaining(e.target.value)}
-            className="bg-[#0a0a0a] border border-[#1a1a1a] text-gray-300 text-xs rounded-lg p-2 focus:outline-none focus:border-[#333] transition-colors"
-            placeholder="30"
-          />
+        <div className="col-span-12 flex min-w-0 flex-col gap-3 md:gap-4 xl:col-span-4">
+          <StudyQueue items={overview.study} onOpenSubject={openSubject} />
+          <BalanceChart scholarship={overview.scholarship} subjects={overview.subjects} onOpenSubject={openSubject} />
+          <FinalsCard finals={overview.finals} notePath={overview.vault.notePath} onOpenSubject={openSubject} />
         </div>
-      </div>
-      
-      {/* Resultado instantáneo */}
-      <div className={`mt-2 p-4 rounded-lg border ${alreadyPassed ? 'border-white/15 bg-white/[0.03]' : isPossible ? 'border-[#1a1a1a] bg-[#0a0a0a]' : 'border-white/20 bg-white/[0.045]'}`}>
-        <div className="flex items-baseline justify-between">
-          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider">Necesitas sacar</span>
-          <span className={`text-2xl font-mono font-bold tracking-tighter ${alreadyPassed ? 'text-white/65' : isPossible ? (isEasy ? 'text-white/65' : 'text-white') : 'text-white/80'}`}>
-            {alreadyPassed ? "✓" : requiredGrade.toFixed(1)}
-          </span>
-        </div>
-        <p className="text-[10px] font-mono text-gray-500 mt-2">
-          {alreadyPassed 
-            ? "Ya tienes la calificación asegurada. Relájate." 
-            : isPossible 
-              ? `en el ${remainingNum}% restante para llegar a ${targetNum} final.`
-              : `Matemáticamente imposible. Necesitas más de 100 en lo que falta.`
-          }
-        </p>
-      </div>
-    </div>
+      </motion.main>
+    </MotionConfig>
   );
 }

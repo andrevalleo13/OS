@@ -1,8 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { serverConfig } from "@/lib/config";
+import { buildOverview, type DbAssignmentInput, type DbCourseInput } from "@/features/uni/derive";
+import { loadUniversityVault } from "@/features/uni/load";
+import type { UniOverview } from "@/features/uni/types";
 
 export async function getCourses() {
   return await prisma.course.findMany({
@@ -34,6 +39,82 @@ export async function updateAssignmentStatus(id: string, status: "pending" | "in
   revalidatePath("/");
   revalidatePath("/uni");
   return assignment;
+}
+
+async function loadUniversityDb(): Promise<{ courses: DbCourseInput[]; assignments: DbAssignmentInput[] } | null> {
+  try {
+    const [courses, assignments] = await Promise.all([
+      prisma.course.findMany({ orderBy: { createdAt: "asc" } }),
+      prisma.assignment.findMany({ orderBy: { dueDate: "asc" }, include: { course: { select: { name: true } } } }),
+    ]);
+    return {
+      courses: courses.map((course) => ({
+        id: course.id,
+        name: course.name,
+        professor: course.professor,
+        schedule: course.schedule,
+        currentGrade: course.currentGrade,
+        absences: course.absences,
+        maxAbsences: course.maxAbsences,
+        createdAt: course.createdAt.toISOString(),
+      })),
+      assignments: assignments.map((assignment) => ({
+        id: assignment.id,
+        title: assignment.title,
+        dueDate: assignment.dueDate.toISOString(),
+        status: assignment.status,
+        weight: assignment.weight,
+        grade: assignment.grade,
+        courseId: assignment.courseId,
+        courseName: assignment.course.name,
+        createdAt: assignment.createdAt.toISOString(),
+      })),
+    };
+  } catch (error) {
+    console.error("Universidad: base de datos no disponible:", error);
+    return null;
+  }
+}
+
+/**
+ * Vista completa de la Universidad: bóveda (leída en esta petición) + base de
+ * datos, fusionadas por `buildOverview`. Si alguna fuente falla, la otra rinde sola.
+ */
+export async function getUniversityOverview(): Promise<UniOverview> {
+  const now = new Date();
+  const today = formatInTimeZone(now, serverConfig.timezone, "yyyy-MM-dd");
+  const [db, { vault, reason }] = await Promise.all([loadUniversityDb(), loadUniversityVault(today)]);
+  return buildOverview({
+    vault,
+    vaultReason: reason,
+    courses: db?.courses ?? null,
+    assignments: db?.assignments ?? null,
+    now,
+    timezone: serverConfig.timezone,
+  });
+}
+
+const createAssignmentSchema = z.object({
+  courseId: z.string().uuid(),
+  title: z.string().trim().min(1).max(160),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  weight: z.number().min(0).max(100).nullable().optional(),
+});
+
+export async function createAssignment(input: { courseId: string; title: string; dueDate: string; weight?: number | null }) {
+  const data = createAssignmentSchema.parse(input);
+  const assignment = await prisma.assignment.create({
+    data: {
+      title: data.title,
+      courseId: data.courseId,
+      weight: data.weight ?? null,
+      // Mediodía en la zona de la bóveda: la fecha civil no se corre al convertir a UTC.
+      dueDate: fromZonedTime(`${data.dueDate}T12:00:00`, serverConfig.timezone),
+    },
+  });
+  revalidatePath("/");
+  revalidatePath("/uni");
+  return { id: assignment.id };
 }
 
 export async function seedUniversityData() {
